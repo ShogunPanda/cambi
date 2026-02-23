@@ -82,8 +82,8 @@ jobs:
           chmod +x /tmp/release/cambi-linux /tmp/release/cambi-macos-intel /tmp/release/cambi-macos-arm
       - name: Create release
         run: |
-          release/cambi-linux update -o -t ${{ inputs.version }}
-          release/cambi-linux release -n > /tmp/release-notes.txt
+          /tmp/release/cambi-linux update -o -t ${{ inputs.version }}
+          /tmp/release/cambi-linux release -n > /tmp/release-notes.txt
           cargo publish
           gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} -F release-notes.txt /tmp/release/*
           git push origin && git push origin -f --tags
