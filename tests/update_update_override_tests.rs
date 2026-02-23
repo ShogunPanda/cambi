@@ -20,7 +20,7 @@ fn update_target_overrides_detected_bump() {
 
   let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
   cmd.current_dir(repo.path()).args(["update", "major"]);
-  cmd.assert().success().stdout("major\n");
+  cmd.assert().success().stdout("Updated version to 2.0.0.\n");
 
   let cargo = fs::read_to_string(repo.path().join("Cargo.toml")).expect("read");
   assert!(cargo.contains("version = \"2.0.0\""));
@@ -40,7 +40,7 @@ fn update_accepts_exact_version_and_skips_bump_detection_output() {
 
   let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
   cmd.current_dir(repo.path()).args(["update", "3.4.5"]);
-  cmd.assert().success().stdout("3.4.5\n");
+  cmd.assert().success().stdout("Updated version to 3.4.5.\n");
 
   let cargo = fs::read_to_string(repo.path().join("Cargo.toml")).expect("read");
   assert!(cargo.contains("version = \"3.4.5\""));

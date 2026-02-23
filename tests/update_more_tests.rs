@@ -61,7 +61,7 @@ fn update_verbose_prints_updated_version_message() {
   cmd
     .assert()
     .success()
-    .stderr(predicate::str::contains("Updated project version to"));
+    .stdout(predicate::str::contains("Updated version to"));
 }
 
 #[test]

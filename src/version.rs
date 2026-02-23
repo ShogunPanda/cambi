@@ -461,14 +461,7 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
   let target = parse_update_target(update_args.target.as_deref(), detected_bump)?;
 
   let updated = apply_update_target(&target, config)?;
-  if config.verbose {
-    eprintln!("Updated project version to {}", updated);
-  }
-
-  match target {
-    UpdateTarget::Bump(bump) => println!("{}", bump.as_str()),
-    UpdateTarget::Exact(version) => println!("{}", version),
-  }
+  println!("Updated version to {}.", updated);
 
   Ok(())
 }
