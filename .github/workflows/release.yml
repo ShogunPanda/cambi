@@ -95,7 +95,7 @@ jobs:
           git commit --amend --no-edit
           cargo publish
 
-          gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} -F release-notes.txt /tmp/release/*
+          gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} -F /tmp/release-notes.txt /tmp/release/*
           git push origin && git push origin -f --tags
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
