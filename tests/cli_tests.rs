@@ -35,6 +35,44 @@ fn changelog_conflicts_are_enforced() {
 }
 
 #[test]
+fn changelog_commit_message_is_parsed() {
+  let args = Args::parse_from([
+    "cambi",
+    "changelog",
+    "--commit",
+    "--commit-message",
+    "custom message",
+  ]);
+
+  match args.command {
+    Command::Changelog(changelog_args) => {
+      assert!(changelog_args.commit);
+      assert_eq!(changelog_args.commit_message.as_deref(), Some("custom message"));
+    }
+    _ => panic!("expected changelog command"),
+  }
+}
+
+#[test]
+fn changelog_commit_without_message_is_parsed() {
+  let args = Args::parse_from(["cambi", "changelog", "--commit"]);
+
+  match args.command {
+    Command::Changelog(changelog_args) => {
+      assert!(changelog_args.commit);
+      assert_eq!(changelog_args.commit_message, None);
+    }
+    _ => panic!("expected changelog command"),
+  }
+}
+
+#[test]
+fn changelog_commit_message_requires_commit() {
+  let parsed = Args::try_parse_from(["cambi", "changelog", "--commit-message", "custom"]);
+  assert!(parsed.is_err());
+}
+
+#[test]
 fn version_from_tag_is_parsed() {
   let parsed = Args::try_parse_from(["cambi", "version", "--from-tag", "v1.2.3"]);
   assert!(parsed.is_ok());
@@ -58,8 +96,110 @@ fn update_target_is_parsed() {
 }
 
 #[test]
+fn update_commit_message_is_parsed() {
+  let args = Args::parse_from([
+    "cambi",
+    "update",
+    "major",
+    "--commit",
+    "--commit-message",
+    "custom message",
+  ]);
+
+  match args.command {
+    Command::Update(update_args) => {
+      assert_eq!(update_args.target.as_deref(), Some("major"));
+      assert!(update_args.commit);
+      assert_eq!(update_args.commit_message.as_deref(), Some("custom message"));
+    }
+    _ => panic!("expected update command"),
+  }
+}
+
+#[test]
+fn update_commit_without_message_is_parsed() {
+  let args = Args::parse_from(["cambi", "update", "major", "--commit"]);
+
+  match args.command {
+    Command::Update(update_args) => {
+      assert_eq!(update_args.target.as_deref(), Some("major"));
+      assert!(update_args.commit);
+      assert_eq!(update_args.commit_message, None);
+      assert!(!update_args.tag);
+    }
+    _ => panic!("expected update command"),
+  }
+}
+
+#[test]
+fn update_commit_message_requires_commit() {
+  let parsed = Args::try_parse_from(["cambi", "update", "major", "--commit-message", "custom"]);
+  assert!(parsed.is_err());
+}
+
+#[test]
+fn update_tag_requires_commit() {
+  let parsed = Args::try_parse_from(["cambi", "update", "--tag"]);
+  assert!(parsed.is_err());
+}
+
+#[test]
+fn update_tag_is_parsed_with_commit() {
+  let args = Args::parse_from(["cambi", "update", "major", "--commit", "--tag"]);
+
+  match args.command {
+    Command::Update(update_args) => {
+      assert_eq!(update_args.target.as_deref(), Some("major"));
+      assert!(update_args.commit);
+      assert!(update_args.tag);
+    }
+    _ => panic!("expected update command"),
+  }
+}
+
+#[test]
+fn update_short_flags_are_parsed() {
+  let args = Args::parse_from(["cambi", "update", "major", "-o", "-m", "msg", "-t"]);
+
+  match args.command {
+    Command::Update(update_args) => {
+      assert_eq!(update_args.target.as_deref(), Some("major"));
+      assert!(update_args.commit);
+      assert_eq!(update_args.commit_message.as_deref(), Some("msg"));
+      assert!(update_args.tag);
+    }
+    _ => panic!("expected update command"),
+  }
+}
+
+#[test]
+fn changelog_short_flags_are_parsed() {
+  let args = Args::parse_from(["cambi", "changelog", "-o", "-m", "msg"]);
+
+  match args.command {
+    Command::Changelog(changelog_args) => {
+      assert!(changelog_args.commit);
+      assert_eq!(changelog_args.commit_message.as_deref(), Some("msg"));
+    }
+    _ => panic!("expected changelog command"),
+  }
+}
+
+#[test]
 fn release_target_is_parsed() {
   let args = Args::parse_from(["cambi", "release", "minor", "--prerelease"]);
+  match args.command {
+    Command::Release(release_args) => {
+      assert_eq!(release_args.target.as_deref(), Some("minor"));
+      assert!(release_args.prerelease);
+    }
+    _ => panic!("expected release command"),
+  }
+}
+
+#[test]
+fn release_prerelease_short_flag_is_parsed() {
+  let args = Args::parse_from(["cambi", "release", "minor", "-a"]);
   match args.command {
     Command::Release(release_args) => {
       assert_eq!(release_args.target.as_deref(), Some("minor"));

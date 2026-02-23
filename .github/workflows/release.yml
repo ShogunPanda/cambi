@@ -74,17 +74,18 @@ jobs:
         id: auth
       - name: Prepare assets
         run: |
-          mkdir -p release
-          mv artifacts/cambi-linux/cambi release/cambi-linux
-          mv artifacts/cambi-macos-intel/cambi release/cambi-macos-intel
-          mv artifacts/cambi-macos-arm/cambi release/cambi-macos-arm
-          mv artifacts/cambi-windows/cambi.exe release/cambi-windows.exe
-          chmod +x release/cambi-linux release/cambi-macos-intel release/cambi-macos-arm
-      - run: |
+          mkdir -p /tmp/release
+          mv artifacts/cambi-linux/cambi /tmp/release/cambi-linux
+          mv artifacts/cambi-macos-intel/cambi /tmp/release/cambi-macos-intel
+          mv artifacts/cambi-macos-arm/cambi /tmp/release/cambi-macos-arm
+          mv artifacts/cambi-windows/cambi.exe /tmp/release/cambi-windows.exe
+          chmod +x /tmp/release/cambi-linux /tmp/release/cambi-macos-intel /tmp/release/cambi-macos-arm
+      - name: Create release
+        run: |
+          release/cambi-linux update -o -t ${{ inputs.version }}
+          release/cambi-linux release -n > /tmp/release-notes.txt
           cargo publish
-          git tag "v${{ inputs.version }}"
+          gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} -F release-notes.txt /tmp/release/*
+          git push origin && git push origin -f --tags
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-      - name: Create GitHub Release
-        run: |
-          gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} release/*

@@ -18,13 +18,25 @@ pub struct VersionArgs {
 
 #[derive(clap::Args, Debug, Default)]
 pub struct UpdateArgs {
+  /// Optional explicit update target (major|minor|patch or a semver like 1.2.3
+  /// / v1.2.3).
+  pub target: Option<String>,
+
   /// Override start tag instead of auto-detecting latest version tag.
   #[arg(long, short = 'f')]
   pub from_tag: Option<String>,
 
-  /// Optional explicit update target (major|minor|patch or a semver like 1.2.3
-  /// / v1.2.3).
-  pub target: Option<String>,
+  /// Auto-commit updated version file.
+  #[arg(long, short = 'o')]
+  pub commit: bool,
+
+  /// Custom commit message (requires --commit).
+  #[arg(long, short = 'm', requires = "commit", value_name = "MESSAGE")]
+  pub commit_message: Option<String>,
+
+  /// Create a tag for the new version (requires --commit).
+  #[arg(long, short = 't', requires = "commit")]
+  pub tag: bool,
 }
 
 #[derive(clap::Args, Debug, Default)]
@@ -34,8 +46,12 @@ pub struct ChangelogArgs {
   pub rebuild: bool,
 
   /// Auto-commit if CHANGELOG.md is the only changed file.
-  #[arg(long, short = 'm', conflicts_with = "dry_run")]
+  #[arg(long, short = 'o', conflicts_with = "dry_run")]
   pub commit: bool,
+
+  /// Custom commit message (requires --commit).
+  #[arg(long, short = 'm', requires = "commit", value_name = "MESSAGE")]
+  pub commit_message: Option<String>,
 
   /// Preview changes without writing files.
   #[arg(long, short = 'd', conflicts_with = "commit")]
@@ -82,7 +98,7 @@ pub struct ReleaseArgs {
   pub dry_run: bool,
 
   /// Mark the GitHub release as a pre-release (requires positional target).
-  #[arg(long, conflicts_with = "notes_only")]
+  #[arg(long, short = 'a', conflicts_with = "notes_only")]
   pub prerelease: bool,
 }
 

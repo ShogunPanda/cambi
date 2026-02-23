@@ -275,7 +275,11 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
     fs::write(changelog_path, output).context("Failed to write CHANGELOG.md")?;
 
     if changelog_args.commit {
-      commit_changelog("chore: Updated CHANGELOG.md.", config.verbose)?;
+      let commit_message = changelog_args
+        .commit_message
+        .as_deref()
+        .unwrap_or("chore: Updated CHANGELOG.md.");
+      commit_changelog(commit_message, config.verbose)?;
     }
 
     return Ok(());
@@ -328,10 +332,11 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
   fs::write(changelog_path, output).context("Failed to write CHANGELOG.md")?;
 
   if changelog_args.commit {
-    commit_changelog(
-      &format!("chore(release): update changelog for {}", next_version_string),
-      config.verbose,
-    )?;
+    let commit_message = changelog_args
+      .commit_message
+      .as_deref()
+      .unwrap_or("chore: Updated CHANGELOG.md.");
+    commit_changelog(commit_message, config.verbose)?;
   }
 
   Ok(())

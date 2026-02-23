@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use git2::{Repository, Signature, Status, StatusOptions};
 use regex::Regex;
 use semver::Version;
 
@@ -353,49 +354,187 @@ pub fn update_package_swift_version(path: &Path, target: &UpdateTarget) -> Resul
   Ok(updated)
 }
 
-fn apply_update_target(target: &UpdateTarget, config: &EffectiveConfig) -> Result<String> {
+fn commit_updated_file(path: &Path, commit_message: &str) -> Result<()> {
+  let repo = Repository::discover(".").context("Failed to discover git repository")?;
+
+  let path_to_stage = if path.is_absolute() {
+    let workdir = repo.workdir().ok_or(anyhow!("Repository has no working directory"))?;
+    path
+      .strip_prefix(workdir)
+      .context(format!("Path {} is outside repository", path.display()))?
+      .to_path_buf()
+  } else {
+    path.to_path_buf()
+  };
+
+  let mut index = repo.index().context("Cannot open git index")?;
+
+  let mut options = StatusOptions::new();
+  options.include_untracked(false).recurse_untracked_dirs(false);
+  let statuses = repo.statuses(Some(&mut options)).context("Failed to read git status")?;
+
+  for entry in statuses.iter() {
+    let Some(path) = entry.path() else {
+      continue;
+    };
+
+    let status = entry.status();
+    let path = Path::new(path);
+
+    if status.contains(Status::WT_DELETED) || status.contains(Status::INDEX_DELETED) {
+      index
+        .remove_path(path)
+        .context(format!("Cannot stage removal of {}", path.display()))?;
+    } else {
+      index
+        .add_path(path)
+        .context(format!("Cannot stage {}", path.display()))?;
+    }
+  }
+
+  index
+    .add_path(&path_to_stage)
+    .context(format!("Cannot stage {}", path_to_stage.display()))?;
+  index.write().context("Cannot write git index")?;
+
+  let tree_id = index.write_tree().context("Cannot write git tree")?;
+  let tree = repo.find_tree(tree_id).context("Cannot find git tree")?;
+
+  let signature = repo
+    .signature()
+    .or_else(|_| Signature::now("cambi", "cambi@localhost"))
+    .context("Cannot build git signature")?;
+
+  let mut parents = Vec::new();
+  if let Some(oid) = repo.head().ok().and_then(|head| head.target()) {
+    parents.push(repo.find_commit(oid).context("Cannot find HEAD commit")?);
+  }
+
+  let parent_refs = parents.iter().collect::<Vec<_>>();
+  repo
+    .commit(
+      Some("HEAD"),
+      &signature,
+      &signature,
+      commit_message,
+      &tree,
+      &parent_refs,
+    )
+    .context("Cannot create git commit")?;
+
+  Ok(())
+}
+
+fn tag_current_commit(version: &str, tag_pattern: &str) -> Result<()> {
+  let regex = Regex::new(tag_pattern).context(format!("Invalid tag regex pattern: {tag_pattern}"))?;
+
+  let mut generated = Vec::new();
+
+  let raw_pattern = tag_pattern.strip_prefix('^').unwrap_or(tag_pattern);
+  let raw_pattern = raw_pattern.strip_suffix('$').unwrap_or(raw_pattern);
+  let semver_pattern = r"\d+\.\d+\.\d+";
+
+  if let Some((raw_prefix, raw_suffix)) = raw_pattern.split_once(semver_pattern) {
+    let unescape = |raw: &str| {
+      let mut out = String::new();
+      let mut chars = raw.chars();
+
+      while let Some(ch) = chars.next() {
+        if ch == '\\' {
+          if let Some(next) = chars.next() {
+            out.push(next);
+          }
+        } else {
+          out.push(ch);
+        }
+      }
+
+      out
+    };
+
+    generated.push(format!("{}{}{}", unescape(raw_prefix), version, unescape(raw_suffix)));
+  }
+
+  generated.push(format!("v{version}"));
+  generated.push(version.to_string());
+
+  let tag_name = generated
+    .iter()
+    .find(|candidate| regex.is_match(candidate))
+    .ok_or_else(|| anyhow!("Cannot derive tag from pattern '{}' for version {}", tag_pattern, version))?;
+
+  let repo = Repository::discover(".").context("Failed to discover git repository")?;
+  let head = repo.head().context("Cannot resolve HEAD")?;
+  let target = head.peel_to_commit().context("Cannot resolve HEAD commit")?;
+
+  repo
+    .tag_lightweight(tag_name, target.as_object(), false)
+    .context(format!("Cannot create git tag '{}'", tag_name))?;
+
+  Ok(())
+}
+
+fn apply_update_target(target: &UpdateTarget, config: &EffectiveConfig) -> Result<(String, PathBuf)> {
   let cargo_toml = Path::new("Cargo.toml");
   if cargo_toml.exists() {
-    return update_cargo_toml_version(cargo_toml, target);
+    return Ok((update_cargo_toml_version(cargo_toml, target)?, cargo_toml.to_path_buf()));
   }
 
   let package_json = Path::new("package.json");
   if package_json.exists() {
-    return update_package_json_version(package_json, target);
+    return Ok((
+      update_package_json_version(package_json, target)?,
+      package_json.to_path_buf(),
+    ));
   }
 
   let pyproject_toml = Path::new("pyproject.toml");
   if pyproject_toml.exists() {
-    return update_pyproject_toml_version(pyproject_toml, target);
+    return Ok((
+      update_pyproject_toml_version(pyproject_toml, target)?,
+      pyproject_toml.to_path_buf(),
+    ));
   }
 
   if let Ok(gemspec_path) = find_gemspec_path() {
-    return update_gemspec_version(&gemspec_path, target);
+    return Ok((update_gemspec_version(&gemspec_path, target)?, gemspec_path));
   }
 
   let mix_exs = Path::new("mix.exs");
   if mix_exs.exists() {
-    return update_mix_exs_version(mix_exs, target);
+    return Ok((update_mix_exs_version(mix_exs, target)?, mix_exs.to_path_buf()));
   }
 
   let pubspec_yaml = Path::new("pubspec.yaml");
   if pubspec_yaml.exists() {
-    return update_pubspec_yaml_version(pubspec_yaml, target);
+    return Ok((
+      update_pubspec_yaml_version(pubspec_yaml, target)?,
+      pubspec_yaml.to_path_buf(),
+    ));
   }
 
   let package_swift = Path::new("Package.swift");
   if package_swift.exists() {
-    return update_package_swift_version(package_swift, target);
+    return Ok((
+      update_package_swift_version(package_swift, target)?,
+      package_swift.to_path_buf(),
+    ));
   }
 
   let version_lower = Path::new("version");
   if version_lower.exists() {
-    return update_plain_version_file(version_lower, target, &config.tag_pattern);
+    return Ok((
+      update_plain_version_file(version_lower, target, &config.tag_pattern)?,
+      version_lower.to_path_buf(),
+    ));
   }
 
   let version_upper = Path::new("VERSION");
   if version_upper.exists() {
-    return update_plain_version_file(version_upper, target, &config.tag_pattern);
+    return Ok((
+      update_plain_version_file(version_upper, target, &config.tag_pattern)?,
+      version_upper.to_path_buf(),
+    ));
   }
 
   Err(anyhow!(
@@ -426,7 +565,20 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
   let detected_bump = detect_bump(update_args.from_tag.as_deref(), config)?;
   let target = parse_update_target(update_args.target.as_deref(), detected_bump)?;
 
-  let updated = apply_update_target(&target, config)?;
+  let (updated, updated_path) = apply_update_target(&target, config)?;
+
+  if update_args.commit {
+    let commit_message = update_args
+      .commit_message
+      .as_deref()
+      .unwrap_or("chore: Updated version.");
+    commit_updated_file(&updated_path, commit_message)?;
+
+    if update_args.tag {
+      tag_current_commit(&updated, &config.tag_pattern)?;
+    }
+  }
+
   println!("Updated version to {}.", updated);
 
   Ok(())

@@ -117,11 +117,17 @@ cambi update
 cambi u
 cambi update major
 cambi update 1.4.0
+cambi update --commit
+cambi update --commit --commit-message "chore: bump app version"
+cambi update --commit --tag
 ```
 
 Options:
 
 - `-f, --from-tag <FROM_TAG>`: override start tag instead of auto-detecting latest version tag
+- `-o, --commit`: commit updated version file
+- `-m, --commit-message <MESSAGE>`: custom commit message (requires `--commit`)
+- `-t, --tag`: create a git tag for the updated version (requires `--commit`)
 - `-c, --config <CONFIG>`
 - `-p, --tag-pattern <TAG_PATTERN>`
 - `-v, --verbose`
@@ -146,13 +152,15 @@ Update `CHANGELOG.md` with the next pending release section.
 cambi changelog
 cambi c --dry-run
 cambi changelog --commit
+cambi changelog --commit --commit-message "chore: update release notes"
 cambi changelog --rebuild
 ```
 
 Options:
 
 - `-r, --rebuild`: regenerate `CHANGELOG.md` from the first commit
-- `-m, --commit`: auto-commit if `CHANGELOG.md` is the only changed file
+- `-o, --commit`: auto-commit if `CHANGELOG.md` is the only changed file
+- `-m, --commit-message <MESSAGE>`: custom commit message (requires `--commit`)
 - `-d, --dry-run`: preview changes without writing files
 - `-c, --config <CONFIG>`
 - `-p, --tag-pattern <TAG_PATTERN>`
@@ -168,6 +176,7 @@ cambi release
 cambi r --dry-run
 cambi release --rebuild
 cambi release --owner my-org --repo my-repo --token "$GH_RELEASE_TOKEN"
+cambi release 1.2.3 --prerelease
 cambi release --notes-only
 ```
 
@@ -179,6 +188,7 @@ Options:
 - `-o, --owner <OWNER>`: override GitHub owner/organization
 - `-u, --repo <REPO>`: override GitHub repository
 - `-d, --dry-run`: preview release actions without API calls
+- `-a, --prerelease`: mark the GitHub release as a pre-release (requires positional target)
 - `-c, --config <CONFIG>`
 - `-p, --tag-pattern <TAG_PATTERN>`
 - `-v, --verbose`
