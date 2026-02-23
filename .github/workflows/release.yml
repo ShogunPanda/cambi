@@ -49,7 +49,7 @@ jobs:
           key: cargo-${{ hashFiles('**/Cargo.toml') }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Build executable
         run: |
-          cargo run -- update -o -t ${{ inputs.version }}
+          cargo run -- update ${{ inputs.version }}
           cargo build --release
       - name: Upload executable
         uses: actions/upload-artifact@v4
@@ -89,17 +89,21 @@ jobs:
           chmod +x /tmp/release/cambi-linux /tmp/release/cambi-macos-intel /tmp/release/cambi-macos-arm
       - name: Create release
         run: |
-          /tmp/release/cambi-linux changelog -o ${{ inputs.version }}
-          /tmp/release/cambi-linux update -o -t ${{ inputs.version }}
+          /tmp/release/cambi-linux changelog ${{ inputs.version }}
+          /tmp/release/cambi-linux update ${{ inputs.version }}
           /tmp/release/cambi-linux release -n > /tmp/release-notes.txt
-
+      - name: Publish on crates.io
+        run: |
           cargo generate-lockfile
-          git add Cargo.toml Cargo.lock
-          git commit --amend --no-edit
+          git add Cargo.toml Cargo.lock CHANGELOG.md
+          git commit -m "chore: Updated version."
+          git tag -f "v${{ inputs.version }}"
           cargo publish
-
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+      - name: Publish on GitHub
+        run: |
           git push origin HEAD:${{ github.ref }} && git push origin -f --tags
           gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} -F /tmp/release-notes.txt /tmp/release/*
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
           GH_TOKEN: ${{ github.token }}
