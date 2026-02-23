@@ -2,6 +2,7 @@ use std::{collections::HashSet, fs, path::Path};
 
 use anyhow::{Context, Result, anyhow};
 use regex::Regex;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -25,6 +26,8 @@ struct ExistingRelease {
   tag_name: String,
   name: Option<String>,
   body: Option<String>,
+  #[serde(default)]
+  prerelease: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -125,6 +128,63 @@ fn build_release_candidates(tags: &[GitTag], filter: &CommitFilter) -> Result<Ve
   Ok(candidates)
 }
 
+fn build_latest_release_candidate(tags: &[GitTag], filter: &CommitFilter) -> Result<ReleaseCandidate> {
+  let latest_tag = tags
+    .first()
+    .ok_or(anyhow!("No release candidates produced from git tags"))?;
+  let previous_tag = tags.get(1).map(|tag| tag.name.as_str());
+
+  let mut commits = collect_releasable_commits(read_commits_between_tags(previous_tag, &latest_tag.name)?, filter);
+  apply_default_sorting(&mut commits);
+
+  let subjects = commits.into_iter().map(|commit| commit.subject).collect::<Vec<_>>();
+
+  Ok(ReleaseCandidate {
+    tag_name: release_tag(&latest_tag.name),
+    title: release_title(&latest_tag.name),
+    body: render_release_body(&subjects),
+  })
+}
+
+fn bump_release_version(current: Version, target: &str) -> Version {
+  let mut next = current;
+
+  match target {
+    "major" => {
+      next.major += 1;
+      next.minor = 0;
+      next.patch = 0;
+    }
+    "minor" => {
+      next.minor += 1;
+      next.patch = 0;
+    }
+    _ => {
+      next.patch += 1;
+    }
+  }
+
+  next
+}
+
+fn resolve_release_target(current: &str, target: Option<&str>) -> Result<String> {
+  let Some(raw_target) = target else {
+    return Ok(current.to_string());
+  };
+
+  let current_version = Version::parse(current).context(format!("Invalid semver '{current}'"))?;
+  let normalized_target = raw_target.to_ascii_lowercase();
+
+  match normalized_target.as_str() {
+    "major" | "minor" | "patch" => Ok(bump_release_version(current_version, normalized_target.as_str()).to_string()),
+    _ => {
+      let version = normalize_release_version(raw_target);
+      Version::parse(&version).context(format!("Invalid release target version '{raw_target}'"))?;
+      Ok(version)
+    }
+  }
+}
+
 fn github_api_base() -> String {
   std::env::var("CAMBI_GITHUB_API_BASE").unwrap_or_else(|_| "https://api.github.com".to_string())
 }
@@ -215,27 +275,61 @@ fn resolve_token(config: &EffectiveConfig) -> Result<String> {
   ))
 }
 
-pub fn execute_release_command(args: &ReleaseArgs, config: &EffectiveConfig) -> Result<()> {
-  let tags = read_tags(&config.tag_pattern)?;
+fn read_required_tags(tag_pattern: &str) -> Result<Vec<GitTag>> {
+  let tags = read_tags(tag_pattern)?;
   if tags.is_empty() {
-    return Err(anyhow!(
-      "No matching git tags found for pattern '{}'",
-      config.tag_pattern
-    ));
+    return Err(anyhow!("No matching git tags found for pattern '{}'", tag_pattern));
   }
 
+  Ok(tags)
+}
+
+fn resolve_target_candidates(args: &ReleaseArgs, config: &EffectiveConfig) -> Result<Vec<ReleaseCandidate>> {
+  if args.rebuild {
+    let tags = read_required_tags(&config.tag_pattern)?;
+    let filter = CommitFilter::new(&config.ignore_patterns)?;
+    return build_release_candidates(&tags, &filter);
+  }
+
+  if let Some(target) = args.target.as_deref() {
+    let normalized_target = target.to_ascii_lowercase();
+
+    if matches!(normalized_target.as_str(), "major" | "minor" | "patch" | "path") {
+      let tags = read_required_tags(&config.tag_pattern)?;
+      let filter = CommitFilter::new(&config.ignore_patterns)?;
+      let mut candidate = build_latest_release_candidate(&tags, &filter)?;
+      let target_version = resolve_release_target(&candidate.title, Some(target))?;
+      candidate.title = target_version.clone();
+      candidate.tag_name = release_tag(&target_version);
+
+      return Ok(vec![candidate]);
+    }
+
+    let version = normalize_release_version(target);
+    Version::parse(&version).context(format!("Invalid release target version '{target}'"))?;
+
+    return Ok(vec![ReleaseCandidate {
+      tag_name: release_tag(&version),
+      title: version,
+      body: render_release_body(&[]),
+    }]);
+  }
+
+  let tags = read_required_tags(&config.tag_pattern)?;
   let filter = CommitFilter::new(&config.ignore_patterns)?;
-  let candidates = build_release_candidates(&tags, &filter)?;
-  let target_candidates = if args.rebuild {
-    candidates
-  } else {
-    vec![
-      candidates
-        .last()
-        .cloned()
-        .ok_or(anyhow!("No release candidates produced from git tags"))?,
-    ]
-  };
+  Ok(vec![build_latest_release_candidate(&tags, &filter)?])
+}
+
+pub fn execute_release_command(args: &ReleaseArgs, config: &EffectiveConfig) -> Result<()> {
+  if args.rebuild && args.target.is_some() {
+    return Err(anyhow!("Cannot combine --rebuild with an explicit release target"));
+  }
+
+  if args.prerelease && args.target.is_none() {
+    return Err(anyhow!("--prerelease requires an explicit positional release target"));
+  }
+
+  let target_candidates = resolve_target_candidates(args, config)?;
 
   if args.notes_only {
     println!("{}", target_candidates[0].body);
@@ -289,14 +383,15 @@ pub fn execute_release_command(args: &ReleaseArgs, config: &EffectiveConfig) -> 
       name: candidate.title.clone(),
       body: candidate.body.clone(),
       draft: false,
-      prerelease: false,
+      prerelease: args.prerelease,
     };
 
     if let Some(found) = existing.iter().find(|release| release.tag_name == candidate.tag_name) {
       let same_name = found.name.as_deref() == Some(payload.name.as_str());
       let same_body = found.body.as_deref() == Some(payload.body.as_str());
+      let same_prerelease = found.prerelease == payload.prerelease;
 
-      if same_name && same_body {
+      if same_name && same_body && same_prerelease {
         continue;
       }
 

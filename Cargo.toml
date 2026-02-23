@@ -1,64 +1,3 @@
-[dependencies.anyhow]
-  features = ["backtrace"]
-  version  = "1.0.101"
-
-[dependencies.chrono]
-  default-features = false
-  features         = ["clock", "std"]
-  version          = "0.4.42"
-
-[dependencies.clap]
-  default-features = false
-  features         = ["std", "derive", "error-context", "help"]
-  version          = "4.5.58"
-
-[dependencies.git2]
-  version = "0.20.2"
-
-[dependencies.regex]
-  version = "1.12.3"
-
-[dependencies.semver]
-  version = "1.0.27"
-
-[dependencies.serde]
-  features = ["derive"]
-  version  = "1.0.228"
-
-[dependencies.serde_json]
-  version = "1.0.145"
-
-[dependencies.serde_yaml]
-  version = "0.9.34"
-
-[dependencies.tempera]
-  version = "0.3.0"
-
-[dependencies.toml]
-  version = "0.9.8"
-
-[dependencies.ureq]
-  features = ["json"]
-  version  = "2.12.1"
-
-[dev-dependencies.assert_cmd]
-  version = "2.0.17"
-
-[dev-dependencies.predicates]
-  version = "3.1.3"
-
-[dev-dependencies.serial_test]
-  version = "3.2.0"
-
-[dev-dependencies.tempfile]
-  version = "3.23.0"
-
-[dev-dependencies.tiny_http]
-  version = "0.12.0"
-
-[lib]
-  doctest = false
-  test    = false
 
 [package]
   categories  = ["command-line-utilities", "command-line-interface"]
@@ -70,6 +9,40 @@
   name        = "cambi"
   repository  = "https://github.com/ShogunPanda/cambi"
   version     = "0.1.0"
+
+[dependencies]
+  anyhow = { version = "1.0.101", features = ["backtrace"] }
+  chrono = { version = "0.4.42", default-features = false, features = [
+    "clock",
+    "std",
+  ] }
+  clap = { version = "4.5.58", default-features = false, features = [
+    "std",
+    "derive",
+    "error-context",
+    "help",
+  ] }
+  git2 = "0.20.2"
+  regex = "1.12.3"
+  semver = "1.0.27"
+  serde = { version = "1.0.228", features = ["derive"] }
+  serde_json = "1.0.145"
+  serde_yaml = "0.9.34"
+  tempera = "0.3.0"
+  toml = "0.9.8"
+  toml_edit = "0.22.27"
+  ureq = { version = "2.12.1", features = ["json"] }
+
+[dev-dependencies]
+  assert_cmd  = "2.0.17"
+  predicates  = "3.1.3"
+  serial_test = "3.2.0"
+  tempfile    = "3.23.0"
+  tiny_http   = "0.12.0"
+
+[lib]
+  doctest = false
+  test    = false
 
 [profile.release]
   codegen-units = 1

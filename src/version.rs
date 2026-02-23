@@ -54,7 +54,7 @@ pub fn latest_tag_version(tag_pattern: &str) -> Result<Version> {
 }
 
 #[derive(Debug, Clone)]
-enum UpdateTarget {
+pub enum UpdateTarget {
   Bump(BumpLevel),
   Exact(Version),
 }
@@ -74,7 +74,7 @@ fn parse_update_target(target: Option<&str>, commits_bump: BumpLevel) -> Result<
   match raw_target.to_ascii_lowercase().as_str() {
     "major" => Ok(UpdateTarget::Bump(BumpLevel::Major)),
     "minor" => Ok(UpdateTarget::Bump(BumpLevel::Minor)),
-    "patch" | "path" => Ok(UpdateTarget::Bump(BumpLevel::Patch)),
+    "patch" => Ok(UpdateTarget::Bump(BumpLevel::Patch)),
     _ => Ok(UpdateTarget::Exact(normalize_semver(raw_target)?)),
   }
 }
@@ -93,42 +93,32 @@ fn detect_bump(from_tag: Option<&str>, config: &EffectiveConfig) -> Result<BumpL
   Ok(bump)
 }
 
-// TODO: Inline *_with_target methods.
-pub fn update_cargo_toml_version(path: &Path, bump: BumpLevel) -> Result<String> {
-  update_cargo_toml_version_with_target(path, &UpdateTarget::Bump(bump))
-}
-
-fn update_cargo_toml_version_with_target(path: &Path, target: &UpdateTarget) -> Result<String> {
+pub fn update_cargo_toml_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
-  let mut parsed: toml::Value = toml::from_str(&content).context(format!("Invalid TOML in {}", path.display()))?;
+  let mut doc = content
+    .parse::<toml_edit::DocumentMut>()
+    .context(format!("Invalid TOML in {}", path.display()))?;
 
-  let package = parsed
-    .get_mut("package")
-    .and_then(toml::Value::as_table_mut)
+  let package = doc
+    .get("package")
+    .and_then(toml_edit::Item::as_table_like)
     .ok_or(anyhow!("No [package] section found in {}", path.display()))?;
 
   let current = package
     .get("version")
-    .and_then(toml::Value::as_str)
+    .and_then(toml_edit::Item::as_str)
     .ok_or(anyhow!("No package version found in {}", path.display()))?;
 
   let next = resolve_target_version(normalize_semver(current)?, target);
-  package.insert("version".to_string(), toml::Value::String(next.to_string()));
+  let next_string = next.to_string();
+  doc["package"]["version"] = toml_edit::value(next_string.clone());
 
-  fs::write(
-    path,
-    toml::to_string_pretty(&parsed).context("Cannot serialize Cargo.toml")? + "\n",
-  )
-  .context(format!("Cannot write {}", path.display()))?;
+  fs::write(path, doc.to_string()).context(format!("Cannot write {}", path.display()))?;
 
-  Ok(next.to_string())
+  Ok(next_string)
 }
 
-pub fn update_package_json_version(path: &Path, bump: BumpLevel) -> Result<String> {
-  update_package_json_version_with_target(path, &UpdateTarget::Bump(bump))
-}
-
-fn update_package_json_version_with_target(path: &Path, target: &UpdateTarget) -> Result<String> {
+pub fn update_package_json_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let mut json: serde_json::Value =
     serde_json::from_str(&content).context(format!("Invalid JSON in {}", path.display()))?;
@@ -155,11 +145,7 @@ fn update_package_json_version_with_target(path: &Path, target: &UpdateTarget) -
   Ok(next.to_string())
 }
 
-pub fn update_pyproject_toml_version(path: &Path, bump: BumpLevel) -> Result<String> {
-  update_pyproject_toml_version_with_target(path, &UpdateTarget::Bump(bump))
-}
-
-fn update_pyproject_toml_version_with_target(path: &Path, target: &UpdateTarget) -> Result<String> {
+pub fn update_pyproject_toml_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let mut parsed: toml::Value = toml::from_str(&content).context(format!("Invalid TOML in {}", path.display()))?;
 
@@ -213,11 +199,7 @@ pub fn find_gemspec_path() -> Result<PathBuf> {
   Err(anyhow!("No .gemspec file found in current directory"))
 }
 
-pub fn update_gemspec_version(path: &Path, bump: BumpLevel) -> Result<String> {
-  update_gemspec_version_with_target(path, &UpdateTarget::Bump(bump))
-}
-
-fn update_gemspec_version_with_target(path: &Path, target: &UpdateTarget) -> Result<String> {
+pub fn update_gemspec_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let re = Regex::new(r#"^(?P<indent>\s*spec\.version\s*=\s*["'])(?P<version>[^"']+)(?P<suffix>["']\s*)$"#)
     .expect("gemspec version regex must compile");
@@ -251,11 +233,7 @@ fn update_gemspec_version_with_target(path: &Path, target: &UpdateTarget) -> Res
   Ok(updated)
 }
 
-pub fn update_plain_version_file(path: &Path, bump: BumpLevel, tag_pattern: &str) -> Result<String> {
-  update_plain_version_file_with_target(path, &UpdateTarget::Bump(bump), tag_pattern)
-}
-
-fn update_plain_version_file_with_target(path: &Path, target: &UpdateTarget, tag_pattern: &str) -> Result<String> {
+pub fn update_plain_version_file(path: &Path, target: &UpdateTarget, tag_pattern: &str) -> Result<String> {
   let current = if path.exists() {
     normalize_semver(&fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?)?
   } else {
@@ -268,11 +246,7 @@ fn update_plain_version_file_with_target(path: &Path, target: &UpdateTarget, tag
   Ok(next.to_string())
 }
 
-pub fn update_mix_exs_version(path: &Path, bump: BumpLevel) -> Result<String> {
-  update_mix_exs_version_with_target(path, &UpdateTarget::Bump(bump))
-}
-
-fn update_mix_exs_version_with_target(path: &Path, target: &UpdateTarget) -> Result<String> {
+pub fn update_mix_exs_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let version_line = Regex::new(r#"^(?P<prefix>\s*version:\s*["'])(?P<version>[^"']+)(?P<suffix>["']\s*,?\s*)$"#)
     .expect("mix.exs version regex must compile");
@@ -306,11 +280,7 @@ fn update_mix_exs_version_with_target(path: &Path, target: &UpdateTarget) -> Res
   Ok(updated)
 }
 
-pub fn update_pubspec_yaml_version(path: &Path, bump: BumpLevel) -> Result<String> {
-  update_pubspec_yaml_version_with_target(path, &UpdateTarget::Bump(bump))
-}
-
-fn update_pubspec_yaml_version_with_target(path: &Path, target: &UpdateTarget) -> Result<String> {
+pub fn update_pubspec_yaml_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let mut parsed: serde_yaml::Value =
     serde_yaml::from_str(&content).context(format!("Invalid YAML in {}", path.display()))?;
@@ -340,11 +310,7 @@ fn update_pubspec_yaml_version_with_target(path: &Path, target: &UpdateTarget) -
   Ok(next.to_string())
 }
 
-pub fn update_package_swift_version(path: &Path, bump: BumpLevel) -> Result<String> {
-  update_package_swift_version_with_target(path, &UpdateTarget::Bump(bump))
-}
-
-fn update_package_swift_version_with_target(path: &Path, target: &UpdateTarget) -> Result<String> {
+pub fn update_package_swift_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let variable_line =
     Regex::new(r#"^(?P<prefix>\s*(?:let|var)\s+version\s*=\s*["'])(?P<version>[^"']+)(?P<suffix>["']\s*)$"#)
@@ -390,46 +356,46 @@ fn update_package_swift_version_with_target(path: &Path, target: &UpdateTarget) 
 fn apply_update_target(target: &UpdateTarget, config: &EffectiveConfig) -> Result<String> {
   let cargo_toml = Path::new("Cargo.toml");
   if cargo_toml.exists() {
-    return update_cargo_toml_version_with_target(cargo_toml, target);
+    return update_cargo_toml_version(cargo_toml, target);
   }
 
   let package_json = Path::new("package.json");
   if package_json.exists() {
-    return update_package_json_version_with_target(package_json, target);
+    return update_package_json_version(package_json, target);
   }
 
   let pyproject_toml = Path::new("pyproject.toml");
   if pyproject_toml.exists() {
-    return update_pyproject_toml_version_with_target(pyproject_toml, target);
+    return update_pyproject_toml_version(pyproject_toml, target);
   }
 
   if let Ok(gemspec_path) = find_gemspec_path() {
-    return update_gemspec_version_with_target(&gemspec_path, target);
+    return update_gemspec_version(&gemspec_path, target);
   }
 
   let mix_exs = Path::new("mix.exs");
   if mix_exs.exists() {
-    return update_mix_exs_version_with_target(mix_exs, target);
+    return update_mix_exs_version(mix_exs, target);
   }
 
   let pubspec_yaml = Path::new("pubspec.yaml");
   if pubspec_yaml.exists() {
-    return update_pubspec_yaml_version_with_target(pubspec_yaml, target);
+    return update_pubspec_yaml_version(pubspec_yaml, target);
   }
 
   let package_swift = Path::new("Package.swift");
   if package_swift.exists() {
-    return update_package_swift_version_with_target(package_swift, target);
+    return update_package_swift_version(package_swift, target);
   }
 
   let version_lower = Path::new("version");
   if version_lower.exists() {
-    return update_plain_version_file_with_target(version_lower, target, &config.tag_pattern);
+    return update_plain_version_file(version_lower, target, &config.tag_pattern);
   }
 
   let version_upper = Path::new("VERSION");
   if version_upper.exists() {
-    return update_plain_version_file_with_target(version_upper, target, &config.tag_pattern);
+    return update_plain_version_file(version_upper, target, &config.tag_pattern);
   }
 
   Err(anyhow!(

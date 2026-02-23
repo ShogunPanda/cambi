@@ -23,6 +23,9 @@ fn command_name_is_reported() {
 fn release_conflicts_are_enforced() {
   let parsed = Args::try_parse_from(["cambi", "release", "--notes-only", "--rebuild"]);
   assert!(parsed.is_err());
+
+  let parsed = Args::try_parse_from(["cambi", "release", "1.2.3", "--rebuild"]);
+  assert!(parsed.is_err());
 }
 
 #[test]
@@ -51,6 +54,18 @@ fn update_target_is_parsed() {
       assert_eq!(update_args.target.as_deref(), Some("major"));
     }
     _ => panic!("expected update command"),
+  }
+}
+
+#[test]
+fn release_target_is_parsed() {
+  let args = Args::parse_from(["cambi", "release", "minor", "--prerelease"]);
+  match args.command {
+    Command::Release(release_args) => {
+      assert_eq!(release_args.target.as_deref(), Some("minor"));
+      assert!(release_args.prerelease);
+    }
+    _ => panic!("expected release command"),
   }
 }
 

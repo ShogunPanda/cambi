@@ -3,9 +3,9 @@ use std::{env, fs, path::Path};
 use cambi::{
   conventional::BumpLevel,
   version::{
-    find_gemspec_path, latest_tag_version, normalize_semver, update_cargo_toml_version, update_gemspec_version,
-    update_mix_exs_version, update_package_json_version, update_package_swift_version, update_plain_version_file,
-    update_pubspec_yaml_version, update_pyproject_toml_version,
+    UpdateTarget, find_gemspec_path, latest_tag_version, normalize_semver, update_cargo_toml_version,
+    update_gemspec_version, update_mix_exs_version, update_package_json_version, update_package_swift_version,
+    update_plain_version_file, update_pubspec_yaml_version, update_pyproject_toml_version,
   },
 };
 use serial_test::serial;
@@ -22,7 +22,7 @@ fn update_cargo_toml_invalid_toml_errors() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("Cargo.toml");
   fs::write(&file, "[package\n").expect("write");
-  assert!(update_cargo_toml_version(&file, BumpLevel::Patch).is_err());
+  assert!(update_cargo_toml_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).is_err());
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn update_package_json_top_level_not_object_errors() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("package.json");
   fs::write(&file, "[]").expect("write");
-  assert!(update_package_json_version(&file, BumpLevel::Patch).is_err());
+  assert!(update_package_json_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).is_err());
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn update_pyproject_supports_poetry_branch() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("pyproject.toml");
   fs::write(&file, "[tool.poetry]\nversion='1.2.3'\n").expect("write");
-  let new_v = update_pyproject_toml_version(&file, BumpLevel::Patch).expect("update");
+  let new_v = update_pyproject_toml_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).expect("update");
   assert_eq!(new_v, "1.2.4");
 }
 
@@ -58,7 +58,7 @@ fn update_gemspec_preserves_double_quotes() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("x.gemspec");
   fs::write(&file, "spec.version = \"1.2.3\"\n").expect("write");
-  let new_v = update_gemspec_version(&file, BumpLevel::Minor).expect("update");
+  let new_v = update_gemspec_version(&file, &UpdateTarget::Bump(BumpLevel::Minor)).expect("update");
   assert_eq!(new_v, "1.3.0");
 }
 
@@ -67,7 +67,8 @@ fn update_plain_version_file_uses_existing_file() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("VERSION");
   fs::write(&file, "1.2.3\n").expect("write");
-  let new_v = update_plain_version_file(&file, BumpLevel::Patch, r"^v\d+\.\d+\.\d+$").expect("update");
+  let new_v =
+    update_plain_version_file(&file, &UpdateTarget::Bump(BumpLevel::Patch), r"^v\d+\.\d+\.\d+$").expect("update");
   assert_eq!(new_v, "1.2.4");
 }
 
@@ -76,7 +77,7 @@ fn update_mix_exs_with_single_quotes_is_supported() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("mix.exs");
   fs::write(&file, "  version: '1.2.3',\n").expect("write");
-  let new_v = update_mix_exs_version(&file, BumpLevel::Patch).expect("update");
+  let new_v = update_mix_exs_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).expect("update");
   assert_eq!(new_v, "1.2.4");
 }
 
@@ -85,7 +86,7 @@ fn update_pubspec_yaml_non_mapping_errors() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("pubspec.yaml");
   fs::write(&file, "- 1\n- 2\n").expect("write");
-  assert!(update_pubspec_yaml_version(&file, BumpLevel::Patch).is_err());
+  assert!(update_pubspec_yaml_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).is_err());
 }
 
 #[test]
@@ -162,7 +163,7 @@ fn update_package_swift_var_form_supported() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("Package.swift");
   fs::write(&file, "var version = \"1.2.3\"\n").expect("write");
-  let new_v = update_package_swift_version(&file, BumpLevel::Patch).expect("update");
+  let new_v = update_package_swift_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).expect("update");
   assert_eq!(new_v, "1.2.4");
   assert!(Path::new(&file).exists());
 }

@@ -44,6 +44,11 @@ pub struct ChangelogArgs {
 
 #[derive(clap::Args, Debug, Default)]
 pub struct ReleaseArgs {
+  /// Optional explicit release target (major|minor|patch or a semver like
+  /// 1.2.3 / v1.2.3).
+  #[arg(conflicts_with = "rebuild")]
+  pub target: Option<String>,
+
   /// Delete/recreate releases from scratch.
   #[arg(long, short = 'r', conflicts_with = "notes_only")]
   pub rebuild: bool,
@@ -75,6 +80,10 @@ pub struct ReleaseArgs {
   /// Preview release actions without API calls.
   #[arg(long, short = 'd', conflicts_with = "notes_only")]
   pub dry_run: bool,
+
+  /// Mark the GitHub release as a pre-release (requires positional target).
+  #[arg(long, conflicts_with = "notes_only")]
+  pub prerelease: bool,
 }
 
 #[derive(Subcommand, Debug)]

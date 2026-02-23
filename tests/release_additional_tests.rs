@@ -59,3 +59,54 @@ fn release_fails_without_token_when_not_dry_run() {
     .failure()
     .stderr(predicate::str::contains("Missing GitHub token"));
 }
+
+#[test]
+fn release_fails_with_invalid_target_version() {
+  let repo = init_repo();
+  seed_single_file_repo(
+    &repo,
+    "Cargo.toml",
+    "[package]\nname=\"x\"\nversion=\"0.1.0\"\nrepository=\"https://github.com/octo/r\"\n",
+  );
+  fs::write(repo.path().join("a.txt"), "x").expect("write");
+  commit_with_date(repo.path(), "feat: add", "2026-02-22T00:00:00Z");
+  crate::common::git(repo.path(), &["tag", "v0.2.0"]);
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd.current_dir(repo.path()).args(["release", "nope", "--dry-run"]);
+  cmd
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("Invalid release target version 'nope'"));
+}
+
+#[test]
+fn release_exact_target_does_not_require_tags() {
+  let repo = init_repo();
+  fs::write(
+    repo.path().join("Cargo.toml"),
+    "[package]\nname=\"x\"\nversion=\"0.1.0\"\nrepository=\"https://github.com/octo/r\"\n",
+  )
+  .expect("write");
+  fs::write(repo.path().join("a.txt"), "x").expect("write");
+  commit_with_date(repo.path(), "feat: add", "2026-02-22T00:00:00Z");
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd.current_dir(repo.path()).args(["release", "1.9.0", "--dry-run"]);
+  cmd
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("tag=v1.9.0 title=1.9.0"));
+}
+
+#[test]
+fn release_prerelease_requires_target() {
+  let repo = init_repo();
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd
+    .current_dir(repo.path())
+    .args(["release", "--prerelease", "--dry-run"]);
+  cmd.assert().failure().stderr(predicate::str::contains(
+    "--prerelease requires an explicit positional release target",
+  ));
+}

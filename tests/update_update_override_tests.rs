@@ -23,7 +23,11 @@ fn update_target_overrides_detected_bump() {
   cmd.assert().success().stdout("Updated version to 2.0.0.\n");
 
   let cargo = fs::read_to_string(repo.path().join("Cargo.toml")).expect("read");
-  assert!(cargo.contains("version = \"2.0.0\""));
+  assert!(
+    cargo
+      .lines()
+      .any(|line| line.trim_start().starts_with("version") && line.contains("\"2.0.0\""))
+  );
 }
 
 #[test]
@@ -43,5 +47,9 @@ fn update_accepts_exact_version_and_skips_bump_detection_output() {
   cmd.assert().success().stdout("Updated version to 3.4.5.\n");
 
   let cargo = fs::read_to_string(repo.path().join("Cargo.toml")).expect("read");
-  assert!(cargo.contains("version = \"3.4.5\""));
+  assert!(
+    cargo
+      .lines()
+      .any(|line| line.trim_start().starts_with("version") && line.contains("\"3.4.5\""))
+  );
 }
