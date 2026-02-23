@@ -1,3 +1,8 @@
+### 2026-02-23 / 0.3.1
+
+- fix: Fixed release workflow.
+- fix: Fixed release workflow.
+
 ### 2026-02-23 / 0.3.0
 
 - feat: Added bump support to changelog.
