@@ -61,7 +61,7 @@ jobs:
     needs: build
     permissions:
       id-token: write
-
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -79,11 +79,11 @@ jobs:
           mv artifacts/cambi-macos-arm/cambi release/cambi-macos-arm
           mv artifacts/cambi-windows/cambi.exe release/cambi-windows.exe
           chmod +x release/cambi-linux release/cambi-macos-intel release/cambi-macos-arm
-      - run: cargo publish
+      - run: |
+          cargo publish
+          git tag "v${{ inputs.version }}"
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
       - name: Create GitHub Release
         run: |
           gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} release/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
