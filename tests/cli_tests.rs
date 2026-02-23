@@ -32,6 +32,9 @@ fn release_conflicts_are_enforced() {
 fn changelog_conflicts_are_enforced() {
   let parsed = Args::try_parse_from(["cambi", "changelog", "--commit", "--dry-run"]);
   assert!(parsed.is_err());
+
+  let parsed = Args::try_parse_from(["cambi", "changelog", "minor", "--rebuild"]);
+  assert!(parsed.is_err());
 }
 
 #[test]
@@ -174,6 +177,18 @@ fn changelog_short_flags_are_parsed() {
     Command::Changelog(changelog_args) => {
       assert!(changelog_args.commit);
       assert_eq!(changelog_args.commit_message.as_deref(), Some("msg"));
+    }
+    _ => panic!("expected changelog command"),
+  }
+}
+
+#[test]
+fn changelog_target_is_parsed() {
+  let args = Args::parse_from(["cambi", "changelog", "minor"]);
+
+  match args.command {
+    Command::Changelog(changelog_args) => {
+      assert_eq!(changelog_args.target.as_deref(), Some("minor"));
     }
     _ => panic!("expected changelog command"),
   }

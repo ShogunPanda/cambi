@@ -150,6 +150,8 @@ Update `CHANGELOG.md` with the next pending release section.
 
 ```sh
 cambi changelog
+cambi changelog minor
+cambi changelog 1.4.0
 cambi c --dry-run
 cambi changelog --commit
 cambi changelog --commit --commit-message "chore: update release notes"
@@ -158,6 +160,7 @@ cambi changelog --rebuild
 
 Options:
 
+- positional `<TARGET>`: explicit changelog target (`major`, `minor`, `patch`, `1.2.3`, `v1.2.3`) overriding inferred bump (conflicts with `--rebuild`)
 - `-r, --rebuild`: regenerate `CHANGELOG.md` from the first commit
 - `-o, --commit`: auto-commit if `CHANGELOG.md` is the only changed file
 - `-m, --commit-message <MESSAGE>`: custom commit message (requires `--commit`)

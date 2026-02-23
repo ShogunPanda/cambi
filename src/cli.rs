@@ -41,6 +41,11 @@ pub struct UpdateArgs {
 
 #[derive(clap::Args, Debug, Default)]
 pub struct ChangelogArgs {
+  /// Optional explicit changelog target (major|minor|patch or a semver like
+  /// 1.2.3 / v1.2.3).
+  #[arg(conflicts_with = "rebuild")]
+  pub target: Option<String>,
+
   /// Regenerate CHANGELOG.md from the first commit.
   #[arg(long, short = 'r')]
   pub rebuild: bool,

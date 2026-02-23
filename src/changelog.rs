@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fs, path::Path};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, Utc};
 use git2::{Repository, Signature, StatusOptions};
 use regex::Regex;
@@ -65,6 +65,28 @@ pub fn bump_version(current: Option<Version>, bump: BumpLevel) -> Version {
   }
 
   next
+}
+
+fn resolve_changelog_target(
+  current: Option<Version>,
+  target: Option<&str>,
+  detected_bump: BumpLevel,
+) -> Result<Version> {
+  let Some(raw_target) = target else {
+    return Ok(bump_version(current, detected_bump));
+  };
+
+  let normalized_target = raw_target.to_ascii_lowercase();
+
+  match normalized_target.as_str() {
+    "major" => Ok(bump_version(current, BumpLevel::Major)),
+    "minor" => Ok(bump_version(current, BumpLevel::Minor)),
+    "patch" => Ok(bump_version(current, BumpLevel::Patch)),
+    _ => {
+      let version = raw_target.trim_start_matches('v');
+      Version::parse(version).map_err(|_| anyhow!("Invalid changelog target version '{raw_target}'"))
+    }
+  }
 }
 
 fn commit_changelog(commit_message: &str, verbose: bool) -> Result<()> {
@@ -258,6 +280,10 @@ fn build_rebuild_output(config: &EffectiveConfig, filter: &CommitFilter, templat
 }
 
 pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &EffectiveConfig) -> Result<()> {
+  if changelog_args.rebuild && changelog_args.target.is_some() {
+    return Err(anyhow!("Cannot combine --rebuild with an explicit changelog target"));
+  }
+
   let changelog_path = Path::new("CHANGELOG.md");
   let existing = fs::read_to_string(changelog_path).unwrap_or_default();
   let existing_versions = extract_versions(&existing);
@@ -305,7 +331,7 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
     .max()
     .unwrap_or(BumpLevel::Patch);
 
-  let next_version = bump_version(latest_version, bump);
+  let next_version = resolve_changelog_target(latest_version, changelog_args.target.as_deref(), bump)?;
   let next_version_string = next_version.to_string();
 
   if existing_versions.contains(&next_version_string) {

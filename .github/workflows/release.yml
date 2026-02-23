@@ -89,7 +89,7 @@ jobs:
           chmod +x /tmp/release/cambi-linux /tmp/release/cambi-macos-intel /tmp/release/cambi-macos-arm
       - name: Create release
         run: |
-          /tmp/release/cambi-linux changelog -o
+          /tmp/release/cambi-linux changelog -o ${{ inputs.version }}
           /tmp/release/cambi-linux update -o -t ${{ inputs.version }}
           /tmp/release/cambi-linux release -n > /tmp/release-notes.txt
 
