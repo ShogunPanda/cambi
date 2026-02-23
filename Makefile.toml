@@ -1,0 +1,43 @@
+config.skip_core_tasks = true
+
+[tasks.prebuild]
+  dependencies = ["format", "lint"]
+
+[tasks.build]
+  command = "cargo"
+  args    = ["build"]
+
+[tasks.test]
+  command = "cargo"
+  args    = ["test"]
+
+[tasks.coverage]
+  command = "cargo"
+  args    = ["llvm-cov", "--summary-only", "--branch"]
+  env     = { RUSTUP_TOOLCHAIN = "nightly" }
+
+[tasks."coverage:html"]
+  command = "cargo"
+  args    = ["llvm-cov", "--html", "--output-dir=coverage", "--branch"]
+  env     = { RUSTUP_TOOLCHAIN = "nightly" }
+
+[tasks.release]
+  command = "cargo"
+  args    = ["build", "--release"]
+
+[tasks.check]
+  dependencies = ["format", "lint"]
+
+[tasks.format]
+  command = "cargo"
+  args    = ["fmt", "--check"]
+  env     = { RUSTUP_TOOLCHAIN = "nightly" }
+
+[tasks.lint]
+  command = "cargo"
+  args    = ["clippy"]
+
+[tasks."lint:fix"]
+  command = "cargo"
+  args    = ["clippy", "--fix", "--allow-dirty"]
+  env     = { RUSTUP_TOOLCHAIN = "nightly" }
