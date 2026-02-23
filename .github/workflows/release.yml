@@ -57,6 +57,7 @@ jobs:
 
   release:
     name: Release
+    environment: main
     runs-on: ubuntu-latest
     needs: build
     permissions:
