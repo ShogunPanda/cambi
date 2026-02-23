@@ -65,16 +65,16 @@ fn detect_owner_repo_from_files() -> Option<(String, String)> {
 
     if let Some(repository) = json.get("repository") {
       let mut repository_url = repository.as_str();
-      if repository_url.is_none() {
-        if let Some(value) = repository.get("url") {
-          repository_url = value.as_str();
-        }
+      if repository_url.is_none()
+        && let Some(value) = repository.get("url")
+      {
+        repository_url = value.as_str();
       }
 
-      if let Some(url) = repository_url {
-        if let Some(parsed) = parse_github_repo_from_url(url) {
-          return Some(parsed);
-        }
+      if let Some(url) = repository_url
+        && let Some(parsed) = parse_github_repo_from_url(url)
+      {
+        return Some(parsed);
       }
     }
   }

@@ -59,6 +59,9 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -66,6 +69,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
       - name: Prepare assets
         run: |
           mkdir -p release
@@ -74,6 +79,9 @@ jobs:
           mv artifacts/cambi-macos-arm/cambi release/cambi-macos-arm
           mv artifacts/cambi-windows/cambi.exe release/cambi-windows.exe
           chmod +x release/cambi-linux release/cambi-macos-intel release/cambi-macos-arm
+      - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
       - name: Create GitHub Release
         run: |
           gh release create "v${{ inputs.version }}" -t "${{ inputs.version }}" ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }} release/*

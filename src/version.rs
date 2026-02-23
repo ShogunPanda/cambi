@@ -163,36 +163,35 @@ fn update_pyproject_toml_version_with_target(path: &Path, target: &UpdateTarget)
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let mut parsed: toml::Value = toml::from_str(&content).context(format!("Invalid TOML in {}", path.display()))?;
 
-  if let Some(project_table) = parsed.get_mut("project").and_then(toml::Value::as_table_mut) {
-    if let Some(version) = project_table.get("version").and_then(toml::Value::as_str) {
-      let next = resolve_target_version(normalize_semver(version)?, target);
-      project_table.insert("version".to_string(), toml::Value::String(next.to_string()));
+  if let Some(project_table) = parsed.get_mut("project").and_then(toml::Value::as_table_mut)
+    && let Some(version) = project_table.get("version").and_then(toml::Value::as_str)
+  {
+    let next = resolve_target_version(normalize_semver(version)?, target);
+    project_table.insert("version".to_string(), toml::Value::String(next.to_string()));
 
-      fs::write(
-        path,
-        toml::to_string_pretty(&parsed).context("Cannot serialize pyproject.toml")? + "\n",
-      )
-      .context(format!("Cannot write {}", path.display()))?;
+    fs::write(
+      path,
+      toml::to_string_pretty(&parsed).context("Cannot serialize pyproject.toml")? + "\n",
+    )
+    .context(format!("Cannot write {}", path.display()))?;
 
-      return Ok(next.to_string());
-    }
+    return Ok(next.to_string());
   }
 
-  if let Some(tool_table) = parsed.get_mut("tool").and_then(toml::Value::as_table_mut) {
-    if let Some(poetry_table) = tool_table.get_mut("poetry").and_then(toml::Value::as_table_mut) {
-      if let Some(version) = poetry_table.get("version").and_then(toml::Value::as_str) {
-        let next = resolve_target_version(normalize_semver(version)?, target);
-        poetry_table.insert("version".to_string(), toml::Value::String(next.to_string()));
+  if let Some(tool_table) = parsed.get_mut("tool").and_then(toml::Value::as_table_mut)
+    && let Some(poetry_table) = tool_table.get_mut("poetry").and_then(toml::Value::as_table_mut)
+    && let Some(version) = poetry_table.get("version").and_then(toml::Value::as_str)
+  {
+    let next = resolve_target_version(normalize_semver(version)?, target);
+    poetry_table.insert("version".to_string(), toml::Value::String(next.to_string()));
 
-        fs::write(
-          path,
-          toml::to_string_pretty(&parsed).context("Cannot serialize pyproject.toml")? + "\n",
-        )
-        .context(format!("Cannot write {}", path.display()))?;
+    fs::write(
+      path,
+      toml::to_string_pretty(&parsed).context("Cannot serialize pyproject.toml")? + "\n",
+    )
+    .context(format!("Cannot write {}", path.display()))?;
 
-        return Ok(next.to_string());
-      }
-    }
+    return Ok(next.to_string());
   }
 
   Err(anyhow!(
@@ -227,20 +226,20 @@ fn update_gemspec_version_with_target(path: &Path, target: &UpdateTarget) -> Res
   let mut updated: Option<String> = None;
 
   for line in content.lines() {
-    if updated.is_none() {
-      if let Some(captures) = re.captures(line) {
-        let current = captures
-          .name("version")
-          .map(|m| m.as_str())
-          .ok_or(anyhow!("Cannot parse spec.version in {}", path.display()))?;
-        let next = resolve_target_version(normalize_semver(current)?, target);
-        let prefix = captures.name("indent").map(|m| m.as_str()).unwrap_or("");
-        let suffix = captures.name("suffix").map(|m| m.as_str()).unwrap_or("");
+    if updated.is_none()
+      && let Some(captures) = re.captures(line)
+    {
+      let current = captures
+        .name("version")
+        .map(|m| m.as_str())
+        .ok_or(anyhow!("Cannot parse spec.version in {}", path.display()))?;
+      let next = resolve_target_version(normalize_semver(current)?, target);
+      let prefix = captures.name("indent").map(|m| m.as_str()).unwrap_or("");
+      let suffix = captures.name("suffix").map(|m| m.as_str()).unwrap_or("");
 
-        lines.push(format!("{prefix}{next}{suffix}"));
-        updated = Some(next.to_string());
-        continue;
-      }
+      lines.push(format!("{prefix}{next}{suffix}"));
+      updated = Some(next.to_string());
+      continue;
     }
 
     lines.push(line.to_string());
@@ -282,20 +281,20 @@ fn update_mix_exs_version_with_target(path: &Path, target: &UpdateTarget) -> Res
   let mut updated: Option<String> = None;
 
   for line in content.lines() {
-    if updated.is_none() {
-      if let Some(captures) = version_line.captures(line) {
-        let current = captures
-          .name("version")
-          .map(|m| m.as_str())
-          .ok_or(anyhow!("Cannot parse version in {}", path.display()))?;
-        let next = resolve_target_version(normalize_semver(current)?, target);
-        let prefix = captures.name("prefix").map(|m| m.as_str()).unwrap_or("");
-        let suffix = captures.name("suffix").map(|m| m.as_str()).unwrap_or("");
+    if updated.is_none()
+      && let Some(captures) = version_line.captures(line)
+    {
+      let current = captures
+        .name("version")
+        .map(|m| m.as_str())
+        .ok_or(anyhow!("Cannot parse version in {}", path.display()))?;
+      let next = resolve_target_version(normalize_semver(current)?, target);
+      let prefix = captures.name("prefix").map(|m| m.as_str()).unwrap_or("");
+      let suffix = captures.name("suffix").map(|m| m.as_str()).unwrap_or("");
 
-        lines.push(format!("{prefix}{next}{suffix}"));
-        updated = Some(next.to_string());
-        continue;
-      }
+      lines.push(format!("{prefix}{next}{suffix}"));
+      updated = Some(next.to_string());
+      continue;
     }
 
     lines.push(line.to_string());
@@ -357,20 +356,20 @@ fn update_package_swift_version_with_target(path: &Path, target: &UpdateTarget) 
   let mut updated: Option<String> = None;
 
   for line in content.lines() {
-    if updated.is_none() {
-      if let Some(captures) = variable_line.captures(line).or_else(|| argument_line.captures(line)) {
-        let current = captures
-          .name("version")
-          .map(|m| m.as_str())
-          .ok_or(anyhow!("Cannot parse version in {}", path.display()))?;
-        let next = resolve_target_version(normalize_semver(current)?, target);
-        let prefix = captures.name("prefix").map(|m| m.as_str()).unwrap_or("");
-        let suffix = captures.name("suffix").map(|m| m.as_str()).unwrap_or("");
+    if updated.is_none()
+      && let Some(captures) = variable_line.captures(line).or_else(|| argument_line.captures(line))
+    {
+      let current = captures
+        .name("version")
+        .map(|m| m.as_str())
+        .ok_or(anyhow!("Cannot parse version in {}", path.display()))?;
+      let next = resolve_target_version(normalize_semver(current)?, target);
+      let prefix = captures.name("prefix").map(|m| m.as_str()).unwrap_or("");
+      let suffix = captures.name("suffix").map(|m| m.as_str()).unwrap_or("");
 
-        lines.push(format!("{prefix}{next}{suffix}"));
-        updated = Some(next.to_string());
-        continue;
-      }
+      lines.push(format!("{prefix}{next}{suffix}"));
+      updated = Some(next.to_string());
+      continue;
     }
 
     lines.push(line.to_string());

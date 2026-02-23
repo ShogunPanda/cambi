@@ -40,7 +40,7 @@ pub fn read_tags(tag_pattern: &str) -> Result<Vec<GitTag>> {
     })
     .collect::<Vec<_>>();
 
-  tags.sort_by(|a, b| b.time.cmp(&a.time));
+  tags.sort_by_key(|b| std::cmp::Reverse(b.time));
   Ok(tags)
 }
 
