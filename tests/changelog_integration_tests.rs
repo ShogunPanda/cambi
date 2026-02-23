@@ -71,14 +71,12 @@ fn changelog_with_custom_commit_message_uses_it() {
   commit_with_date(repo.path(), "feat: add output", "2026-02-22T10:00:00Z");
 
   let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
-  cmd
-    .current_dir(repo.path())
-    .args([
-      "changelog",
-      "--commit",
-      "--commit-message",
-      "chore: custom changelog commit",
-    ]);
+  cmd.current_dir(repo.path()).args([
+    "changelog",
+    "--commit",
+    "--commit-message",
+    "chore: custom changelog commit",
+  ]);
   cmd.assert().success();
 
   let mut log_cmd = Command::new("git");

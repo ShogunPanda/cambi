@@ -461,7 +461,13 @@ fn tag_current_commit(version: &str, tag_pattern: &str) -> Result<()> {
   let tag_name = generated
     .iter()
     .find(|candidate| regex.is_match(candidate))
-    .ok_or_else(|| anyhow!("Cannot derive tag from pattern '{}' for version {}", tag_pattern, version))?;
+    .ok_or_else(|| {
+      anyhow!(
+        "Cannot derive tag from pattern '{}' for version {}",
+        tag_pattern,
+        version
+      )
+    })?;
 
   let repo = Repository::discover(".").context("Failed to discover git repository")?;
   let head = repo.head().context("Cannot resolve HEAD")?;

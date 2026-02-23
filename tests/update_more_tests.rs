@@ -167,12 +167,7 @@ fn update_with_commit_uses_custom_message() {
   let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
   cmd
     .current_dir(repo.path())
-    .args([
-      "update",
-      "--commit",
-      "--commit-message",
-      "chore: custom version commit",
-    ]);
+    .args(["update", "--commit", "--commit-message", "chore: custom version commit"]);
   cmd.assert().success().stdout("Updated version to 1.2.4.\n");
 
   let subject = git(repo.path(), &["log", "-1", "--pretty=%s"]);
@@ -234,15 +229,13 @@ fn update_with_commit_and_tag_uses_prefix_from_tag_pattern() {
   commit_with_date(repo.path(), "fix: patch", "2026-02-22T00:00:00Z");
 
   let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
-  cmd
-    .current_dir(repo.path())
-    .args([
-      "--tag-pattern",
-      "^release-\\d+\\.\\d+\\.\\d+$",
-      "update",
-      "--commit",
-      "--tag",
-    ]);
+  cmd.current_dir(repo.path()).args([
+    "--tag-pattern",
+    "^release-\\d+\\.\\d+\\.\\d+$",
+    "update",
+    "--commit",
+    "--tag",
+  ]);
   cmd.assert().success().stdout("Updated version to 1.2.4.\n");
 
   let tags = git(repo.path(), &["tag", "--list"]);

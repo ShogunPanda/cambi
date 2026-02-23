@@ -36,13 +36,7 @@ fn changelog_conflicts_are_enforced() {
 
 #[test]
 fn changelog_commit_message_is_parsed() {
-  let args = Args::parse_from([
-    "cambi",
-    "changelog",
-    "--commit",
-    "--commit-message",
-    "custom message",
-  ]);
+  let args = Args::parse_from(["cambi", "changelog", "--commit", "--commit-message", "custom message"]);
 
   match args.command {
     Command::Changelog(changelog_args) => {
