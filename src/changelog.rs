@@ -284,11 +284,9 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
     return Err(anyhow!("Cannot combine --rebuild with an explicit changelog target"));
   }
 
-  let changelog_path = Path::new("CHANGELOG.md");
-  let existing = fs::read_to_string(changelog_path).unwrap_or_default();
-  let existing_versions = extract_versions(&existing);
   let filter = CommitFilter::new(&config.ignore_patterns)?;
   let template = config.changelog_template.as_deref();
+  let changelog_path = Path::new("CHANGELOG.md");
 
   if changelog_args.rebuild {
     let output = build_rebuild_output(config, &filter, template)?;
@@ -313,17 +311,7 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
 
   let tags = read_tags(&config.tag_pattern)?;
   let latest_version = tags.first().and_then(|tag| normalize_tag_version(&tag.name));
-
-  let mut commits = collect_releasable_commits(read_commits(None, &config.tag_pattern)?, &filter);
-
-  if commits.is_empty() {
-    if config.verbose {
-      eprintln!("No releasable commits found. CHANGELOG.md not updated.");
-    }
-    return Ok(());
-  }
-
-  apply_default_sorting(&mut commits);
+  let commits = collect_releasable_commits(read_commits(None, &config.tag_pattern)?, &filter);
 
   let bump = commits
     .iter()
@@ -332,6 +320,8 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
     .unwrap_or(BumpLevel::Patch);
 
   let next_version = resolve_changelog_target(latest_version, changelog_args.target.as_deref(), bump)?;
+  let existing = fs::read_to_string(changelog_path).unwrap_or_default();
+  let existing_versions = extract_versions(&existing);
   let next_version_string = next_version.to_string();
 
   if existing_versions.contains(&next_version_string) {
@@ -341,9 +331,19 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
     return Ok(());
   }
 
+  let mut commits = commits;
+  if commits.is_empty() {
+    if config.verbose {
+      eprintln!("No releasable commits found. CHANGELOG.md not updated.");
+    }
+    return Ok(());
+  }
+
+  apply_default_sorting(&mut commits);
+
   let section = ChangelogSection {
     date: format_date(commits.first().map(|commit| commit.time).unwrap_or(0)),
-    version: next_version_string.clone(),
+    version: next_version_string,
     commits: commits.into_iter().map(|commit| commit.subject).collect::<Vec<_>>(),
   };
 

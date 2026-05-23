@@ -43,7 +43,7 @@ fn updates_pyproject_project_version() {
   run_update(repo.path());
 
   let file = fs::read_to_string(repo.path().join("pyproject.toml")).expect("read");
-  assert!(file.contains("version = \"1.3.0\""));
+  assert!(file.contains("version= \"1.3.0\""));
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn updates_pyproject_poetry_version() {
   run_update(repo.path());
 
   let file = fs::read_to_string(repo.path().join("pyproject.toml")).expect("read");
-  assert!(file.contains("version = \"1.3.0\""));
+  assert!(file.contains("version= \"1.3.0\""));
 }
 
 #[test]

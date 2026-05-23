@@ -26,6 +26,10 @@ pub struct UpdateArgs {
   #[arg(long, short = 'f')]
   pub from_tag: Option<String>,
 
+  /// Update CHANGELOG.md before updating the version file.
+  #[arg(long, short = 'l')]
+  pub changelog: bool,
+
   /// Auto-commit updated version file.
   #[arg(long, short = 'o')]
   pub commit: bool,

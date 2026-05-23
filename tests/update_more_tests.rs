@@ -65,6 +65,54 @@ fn update_verbose_prints_updated_version_message() {
 }
 
 #[test]
+fn update_with_changelog_updates_changelog_before_version_file() {
+  let repo = init_repo();
+  seed_single_file_repo(
+    &repo,
+    "Cargo.toml",
+    "[package]\nname=\"x\"\nversion=\"0.1.0\"\nrepository=\"https://github.com/octo/r\"\n",
+  );
+
+  fs::write(repo.path().join("src.rs"), "x").expect("write");
+  commit_with_date(repo.path(), "feat: add", "2026-02-22T00:00:00Z");
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd.current_dir(repo.path()).args(["update", "--changelog", "minor"]);
+  cmd.assert().success().stdout("Updated version to 0.2.0.\n");
+
+  let cargo = fs::read_to_string(repo.path().join("Cargo.toml")).expect("read cargo");
+  let changelog = fs::read_to_string(repo.path().join("CHANGELOG.md")).expect("read changelog");
+
+  assert!(cargo.contains("0.2.0"));
+  assert!(changelog.contains("/ 0.2.0"));
+  assert!(changelog.contains("feat: add"));
+}
+
+#[test]
+fn update_with_commit_and_changelog_commits_both_files() {
+  let repo = init_repo();
+  seed_single_file_repo(
+    &repo,
+    "Cargo.toml",
+    "[package]\nname=\"x\"\nversion=\"0.1.0\"\nrepository=\"https://github.com/octo/r\"\n",
+  );
+
+  fs::write(repo.path().join("src.rs"), "x").expect("write");
+  commit_with_date(repo.path(), "fix: patch", "2026-02-22T00:00:00Z");
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd.current_dir(repo.path()).args(["update", "--commit", "--changelog"]);
+  cmd.assert().success().stdout("Updated version to 0.1.1.\n");
+
+  let committed_files = git(repo.path(), &["show", "--pretty=", "--name-only", "HEAD"]);
+  assert!(committed_files.lines().any(|line| line == "Cargo.toml"));
+  assert!(committed_files.lines().any(|line| line == "CHANGELOG.md"));
+
+  let status = git(repo.path(), &["status", "--short"]);
+  assert_eq!(status.trim(), "");
+}
+
+#[test]
 fn package_swift_version_argument_form_is_supported() {
   let repo = init_repo();
   seed_single_file_repo(&repo, "Package.swift", "let p = Package(\n  version: \"1.2.3\",\n)\n");

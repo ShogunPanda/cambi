@@ -93,6 +93,18 @@ fn update_target_is_parsed() {
 }
 
 #[test]
+fn update_changelog_is_parsed() {
+  let args = Args::parse_from(["cambi", "update", "--changelog"]);
+
+  match args.command {
+    Command::Update(update_args) => {
+      assert!(update_args.changelog);
+    }
+    _ => panic!("expected update command"),
+  }
+}
+
+#[test]
 fn update_commit_message_is_parsed() {
   let args = Args::parse_from([
     "cambi",
@@ -156,13 +168,14 @@ fn update_tag_is_parsed_with_commit() {
 
 #[test]
 fn update_short_flags_are_parsed() {
-  let args = Args::parse_from(["cambi", "update", "major", "-o", "-m", "msg", "-t"]);
+  let args = Args::parse_from(["cambi", "update", "major", "-l", "-o", "-m", "msg", "-t"]);
 
   match args.command {
     Command::Update(update_args) => {
       assert_eq!(update_args.target.as_deref(), Some("major"));
       assert!(update_args.commit);
       assert_eq!(update_args.commit_message.as_deref(), Some("msg"));
+      assert!(update_args.changelog);
       assert!(update_args.tag);
     }
     _ => panic!("expected update command"),

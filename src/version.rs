@@ -9,7 +9,8 @@ use regex::Regex;
 use semver::Version;
 
 use crate::{
-  cli::{SemverArgs, UpdateArgs, VersionArgs},
+  changelog::execute_changelog_command,
+  cli::{ChangelogArgs, SemverArgs, UpdateArgs, VersionArgs},
   config::EffectiveConfig,
   conventional::{BumpLevel, infer_bump},
   filters::CommitFilter,
@@ -148,37 +149,33 @@ pub fn update_package_json_version(path: &Path, target: &UpdateTarget) -> Result
 
 pub fn update_pyproject_toml_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
-  let mut parsed: toml::Value = toml::from_str(&content).context(format!("Invalid TOML in {}", path.display()))?;
+  let mut doc = content
+    .parse::<toml_edit::DocumentMut>()
+    .context(format!("Invalid TOML in {}", path.display()))?;
 
-  if let Some(project_table) = parsed.get_mut("project").and_then(toml::Value::as_table_mut)
-    && let Some(version) = project_table.get("version").and_then(toml::Value::as_str)
+  if let Some(project_table) = doc.get("project").and_then(toml_edit::Item::as_table_like)
+    && let Some(version) = project_table.get("version").and_then(toml_edit::Item::as_str)
   {
     let next = resolve_target_version(normalize_semver(version)?, target);
-    project_table.insert("version".to_string(), toml::Value::String(next.to_string()));
+    let next_string = next.to_string();
+    doc["project"]["version"] = toml_edit::value(next_string.clone());
 
-    fs::write(
-      path,
-      toml::to_string_pretty(&parsed).context("Cannot serialize pyproject.toml")? + "\n",
-    )
-    .context(format!("Cannot write {}", path.display()))?;
+    fs::write(path, doc.to_string()).context(format!("Cannot write {}", path.display()))?;
 
-    return Ok(next.to_string());
+    return Ok(next_string);
   }
 
-  if let Some(tool_table) = parsed.get_mut("tool").and_then(toml::Value::as_table_mut)
-    && let Some(poetry_table) = tool_table.get_mut("poetry").and_then(toml::Value::as_table_mut)
-    && let Some(version) = poetry_table.get("version").and_then(toml::Value::as_str)
+  if let Some(tool_table) = doc.get("tool").and_then(toml_edit::Item::as_table_like)
+    && let Some(poetry_table) = tool_table.get("poetry").and_then(toml_edit::Item::as_table_like)
+    && let Some(version) = poetry_table.get("version").and_then(toml_edit::Item::as_str)
   {
     let next = resolve_target_version(normalize_semver(version)?, target);
-    poetry_table.insert("version".to_string(), toml::Value::String(next.to_string()));
+    let next_string = next.to_string();
+    doc["tool"]["poetry"]["version"] = toml_edit::value(next_string.clone());
 
-    fs::write(
-      path,
-      toml::to_string_pretty(&parsed).context("Cannot serialize pyproject.toml")? + "\n",
-    )
-    .context(format!("Cannot write {}", path.display()))?;
+    fs::write(path, doc.to_string()).context(format!("Cannot write {}", path.display()))?;
 
-    return Ok(next.to_string());
+    return Ok(next_string);
   }
 
   Err(anyhow!(
@@ -354,18 +351,23 @@ pub fn update_package_swift_version(path: &Path, target: &UpdateTarget) -> Resul
   Ok(updated)
 }
 
-fn commit_updated_file(path: &Path, commit_message: &str) -> Result<()> {
+fn commit_updated_paths(paths: &[PathBuf], commit_message: &str) -> Result<()> {
   let repo = Repository::discover(".").context("Failed to discover git repository")?;
 
-  let path_to_stage = if path.is_absolute() {
-    let workdir = repo.workdir().ok_or(anyhow!("Repository has no working directory"))?;
-    path
-      .strip_prefix(workdir)
-      .context(format!("Path {} is outside repository", path.display()))?
-      .to_path_buf()
-  } else {
-    path.to_path_buf()
-  };
+  let workdir = repo.workdir().ok_or(anyhow!("Repository has no working directory"))?;
+  let paths_to_stage = paths
+    .iter()
+    .map(|path| {
+      if path.is_absolute() {
+        return path
+          .strip_prefix(workdir)
+          .context(format!("Path {} is outside repository", path.display()))
+          .map(Path::to_path_buf);
+      }
+
+      Ok(path.to_path_buf())
+    })
+    .collect::<Result<Vec<_>>>()?;
 
   let mut index = repo.index().context("Cannot open git index")?;
 
@@ -392,9 +394,11 @@ fn commit_updated_file(path: &Path, commit_message: &str) -> Result<()> {
     }
   }
 
-  index
-    .add_path(&path_to_stage)
-    .context(format!("Cannot stage {}", path_to_stage.display()))?;
+  for path_to_stage in paths_to_stage {
+    index
+      .add_path(&path_to_stage)
+      .context(format!("Cannot stage {}", path_to_stage.display()))?;
+  }
   index.write().context("Cannot write git index")?;
 
   let tree_id = index.write_tree().context("Cannot write git tree")?;
@@ -571,6 +575,22 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
   let detected_bump = detect_bump(update_args.from_tag.as_deref(), config)?;
   let target = parse_update_target(update_args.target.as_deref(), detected_bump)?;
 
+  if update_args.changelog {
+    let changelog_target = update_args
+      .target
+      .clone()
+      .unwrap_or_else(|| detected_bump.as_str().to_string());
+    let changelog_args = ChangelogArgs {
+      target: Some(changelog_target),
+      rebuild: false,
+      commit: false,
+      commit_message: None,
+      dry_run: false,
+    };
+
+    execute_changelog_command(&changelog_args, config)?;
+  }
+
   let (updated, updated_path) = apply_update_target(&target, config)?;
 
   if update_args.commit {
@@ -578,7 +598,13 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
       .commit_message
       .as_deref()
       .unwrap_or("chore: Updated version.");
-    commit_updated_file(&updated_path, commit_message)?;
+    let mut updated_paths = vec![updated_path];
+
+    if update_args.changelog {
+      updated_paths.push(PathBuf::from("CHANGELOG.md"));
+    }
+
+    commit_updated_paths(&updated_paths, commit_message)?;
 
     if update_args.tag {
       tag_current_commit(&updated, &config.tag_pattern)?;

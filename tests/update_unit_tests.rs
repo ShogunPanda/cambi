@@ -34,12 +34,52 @@ fn update_package_json_top_level_not_object_errors() {
 }
 
 #[test]
+fn update_package_json_preserves_key_order() {
+  let temp = TempDir::new().expect("tmp");
+  let file = temp.path().join("package.json");
+  fs::write(
+    &file,
+    "{\n  \"name\": \"x\",\n  \"version\": \"1.2.3\",\n  \"repository\": \"https://example.com/x\"\n}\n",
+  )
+  .expect("write");
+
+  let new_v = update_package_json_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).expect("update");
+  let updated = fs::read_to_string(&file).expect("read");
+
+  assert_eq!(new_v, "1.2.4");
+  assert_eq!(
+    updated,
+    "{\n  \"name\": \"x\",\n  \"version\": \"1.2.4\",\n  \"repository\": \"https://example.com/x\"\n}\n"
+  );
+}
+
+#[test]
 fn update_pyproject_supports_poetry_branch() {
   let temp = TempDir::new().expect("tmp");
   let file = temp.path().join("pyproject.toml");
   fs::write(&file, "[tool.poetry]\nversion='1.2.3'\n").expect("write");
   let new_v = update_pyproject_toml_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).expect("update");
   assert_eq!(new_v, "1.2.4");
+}
+
+#[test]
+fn update_pyproject_preserves_key_order() {
+  let temp = TempDir::new().expect("tmp");
+  let file = temp.path().join("pyproject.toml");
+  fs::write(
+    &file,
+    "[project]\nname = 'x'\nversion = '1.2.3'\nrepository = 'https://example.com/x'\n",
+  )
+  .expect("write");
+
+  let new_v = update_pyproject_toml_version(&file, &UpdateTarget::Bump(BumpLevel::Patch)).expect("update");
+  let updated = fs::read_to_string(&file).expect("read");
+
+  assert_eq!(new_v, "1.2.4");
+  assert_eq!(
+    updated,
+    "[project]\nname = 'x'\nversion = \"1.2.4\"\nrepository = 'https://example.com/x'\n"
+  );
 }
 
 #[test]
