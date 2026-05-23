@@ -1,3 +1,7 @@
+### 2026-05-23 / 0.4.0
+
+- feat: Added changelog switch to the update command.
+
 ### 2026-02-23 / 0.3.1
 
 - fix: Fixed release workflow.
