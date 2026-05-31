@@ -15,24 +15,30 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: read
     strategy:
       matrix:
         include:
           - name: Linux
             os: ubuntu-latest
             artifact: cambi-linux
+            bootstrap: cambi-linux
             path: target/release/cambi
           - name: Windows
             os: windows-latest
             artifact: cambi-windows
+            bootstrap: cambi-windows.exe
             path: target/release/cambi.exe
           - name: MacOS (Apple Silicon)
             os: macos-latest
             artifact: cambi-macos-arm
+            bootstrap: cambi-macos-arm
             path: target/release/cambi
           - name: MacOS (Apple Intel)
             os: macos-15-intel
             artifact: cambi-macos-intel
+            bootstrap: cambi-macos-intel
             path: target/release/cambi
     name: "Build ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
@@ -47,9 +53,20 @@ jobs:
             ~/.cargo/git
             target
           key: cargo-${{ hashFiles('**/Cargo.toml') }}-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build executable
+      - name: Download latest cambi
+        shell: bash
         run: |
-          cargo run -- update ${{ inputs.version }}
+          mkdir -p .cambi-bootstrap
+          gh release download --repo ShogunPanda/cambi --pattern "${{ matrix.bootstrap }}" --dir .cambi-bootstrap
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            chmod +x ".cambi-bootstrap/${{ matrix.bootstrap }}"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Build executable
+        shell: bash
+        run: |
+          ".cambi-bootstrap/${{ matrix.bootstrap }}" update "${{ inputs.version }}"
           cargo build --release
       - name: Upload executable
         uses: actions/upload-artifact@v4
@@ -90,10 +107,17 @@ jobs:
           mv artifacts/cambi-macos-arm/cambi /tmp/release/cambi-macos-arm
           mv artifacts/cambi-windows/cambi.exe /tmp/release/cambi-windows.exe
           chmod +x /tmp/release/cambi-linux /tmp/release/cambi-macos-intel /tmp/release/cambi-macos-arm
+      - name: Download latest cambi
+        run: |
+          mkdir -p /tmp/cambi-bootstrap
+          gh release download --repo ShogunPanda/cambi --pattern cambi-linux --dir /tmp/cambi-bootstrap
+          chmod +x /tmp/cambi-bootstrap/cambi-linux
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Create release
         run: |
-          /tmp/release/cambi-linux update -l ${{ inputs.version }}
-          /tmp/release/cambi-linux release -n > /tmp/release-notes.txt
+          /tmp/cambi-bootstrap/cambi-linux update -l "${{ inputs.version }}"
+          /tmp/cambi-bootstrap/cambi-linux release -n > /tmp/release-notes.txt
       - name: Publish on crates.io
         run: |
           cargo generate-lockfile
