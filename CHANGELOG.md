@@ -1,3 +1,7 @@
+### 2026-05-31 / 0.5.1
+
+- fix: Fixed version on publishing.
+
 ### 2026-05-31 / 0.5.0
 
 - feat: Added show option to the update command.
