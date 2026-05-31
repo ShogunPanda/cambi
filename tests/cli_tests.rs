@@ -178,7 +178,7 @@ fn update_tag_is_parsed_with_commit() {
 
 #[test]
 fn update_short_flags_are_parsed() {
-  let args = Args::parse_from(["cambi", "update", "major", "-l", "-o", "-m", "msg", "-t", "-d"]);
+  let args = Args::parse_from(["cambi", "update", "major", "-l", "-o", "-m", "msg", "-t", "-d", "-s"]);
 
   match args.command {
     Command::Update(update_args) => {
@@ -188,6 +188,7 @@ fn update_short_flags_are_parsed() {
       assert!(update_args.changelog);
       assert!(update_args.tag);
       assert!(update_args.dry_run);
+      assert!(update_args.show);
     }
     _ => panic!("expected update command"),
   }
@@ -262,7 +263,18 @@ fn single_letter_command_aliases_are_parsed() {
 
 #[test]
 fn single_letter_option_aliases_are_parsed() {
-  let args = Args::parse_from(["cambi", "-c", "cambi.yml", "-p", "^v", "u", "-f", "v1.2.3", "minor"]);
+  let args = Args::parse_from([
+    "cambi",
+    "-c",
+    "cambi.yml",
+    "-p",
+    "^v",
+    "u",
+    "-f",
+    "v1.2.3",
+    "minor",
+    "-s",
+  ]);
 
   assert_eq!(
     args.config.as_deref().map(|p| p.to_string_lossy().to_string()),
@@ -274,6 +286,7 @@ fn single_letter_option_aliases_are_parsed() {
     Command::Update(update_args) => {
       assert_eq!(update_args.from_tag.as_deref(), Some("v1.2.3"));
       assert_eq!(update_args.target.as_deref(), Some("minor"));
+      assert!(update_args.show);
     }
     _ => panic!("expected update command"),
   }

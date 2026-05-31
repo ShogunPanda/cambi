@@ -45,6 +45,10 @@ pub struct UpdateArgs {
   /// Preview changes without writing files.
   #[arg(long, short = 'd')]
   pub dry_run: bool,
+
+  /// Show the computed version without updating files.
+  #[arg(long, short = 's')]
+  pub show: bool,
 }
 
 #[derive(clap::Args, Debug, Default)]

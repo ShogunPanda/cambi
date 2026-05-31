@@ -339,3 +339,43 @@ fn update_dry_run_propagates_to_changelog_and_logs_commit_and_tag() {
   let tags = git(repo.path(), &["tag", "--list"]);
   assert!(!tags.lines().any(|line| line == "v1.2.4"));
 }
+
+#[test]
+fn update_show_outputs_computed_version_and_does_not_write_files() {
+  let repo = init_repo();
+  let original = "[package]\nname=\"x\"\nversion=\"1.2.3\"\nrepository=\"https://github.com/octo/r\"\n";
+  seed_single_file_repo(&repo, "Cargo.toml", original);
+
+  fs::write(repo.path().join("src.rs"), "x").expect("write");
+  commit_with_date(repo.path(), "fix: patch", "2026-02-22T00:00:00Z");
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd.current_dir(repo.path()).args(["update", "--show"]);
+  cmd.assert().success().stdout("1.2.4\n");
+
+  let cargo = fs::read_to_string(repo.path().join("Cargo.toml")).expect("read");
+  assert_eq!(cargo, original);
+}
+
+#[test]
+fn update_show_exits_before_changelog_commit_and_tag() {
+  let repo = init_repo();
+  seed_single_file_repo(
+    &repo,
+    "Cargo.toml",
+    "[package]\nname=\"x\"\nversion=\"1.2.3\"\nrepository=\"https://github.com/octo/r\"\n",
+  );
+
+  fs::write(repo.path().join("src.rs"), "x").expect("write");
+  commit_with_date(repo.path(), "fix: patch", "2026-02-22T00:00:00Z");
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd
+    .current_dir(repo.path())
+    .args(["update", "-s", "--changelog", "--commit", "--tag"]);
+  cmd.assert().success().stdout("1.2.4\n");
+
+  assert!(!repo.path().join("CHANGELOG.md").exists());
+  let tags = git(repo.path(), &["tag", "--list"]);
+  assert!(!tags.lines().any(|line| line == "v1.2.4"));
+}

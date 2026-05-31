@@ -109,6 +109,7 @@ Options:
 #### `update` (`u`)
 
 Update project version files. By default it infers the bump from commits. You can override detection by passing:
+
 - a bump: `major`, `minor`, `patch`
 - an exact semver: `1.2.3` or `v1.2.3`
 
@@ -120,14 +121,18 @@ cambi update 1.4.0
 cambi update --commit
 cambi update --commit --commit-message "chore: bump app version"
 cambi update --commit --tag
+cambi update --show
 ```
 
 Options:
 
 - `-f, --from-tag <FROM_TAG>`: override start tag instead of auto-detecting latest version tag
+- `-l, --changelog`: update `CHANGELOG.md` before updating the version file
 - `-o, --commit`: commit updated version file
 - `-m, --commit-message <MESSAGE>`: custom commit message (requires `--commit`)
 - `-t, --tag`: create a git tag for the updated version (requires `--commit`)
+- `-d, --dry-run`: preview changes without writing files
+- `-s, --show`: show the computed version without updating files
 - `-c, --config <CONFIG>`
 - `-p, --tag-pattern <TAG_PATTERN>`
 - `-v, --verbose`

@@ -796,6 +796,11 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
   let target = parse_update_target(update_args.target.as_deref(), detected_bump)?;
   let (target_version, target_path) = read_update_target(&target, config)?;
 
+  if update_args.show {
+    println!("{target_version}");
+    return Ok(());
+  }
+
   if update_args.changelog {
     let changelog_args = ChangelogArgs {
       target: Some(target_version.clone()),
