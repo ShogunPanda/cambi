@@ -289,3 +289,53 @@ fn update_with_commit_and_tag_uses_prefix_from_tag_pattern() {
   let tags = git(repo.path(), &["tag", "--list"]);
   assert!(tags.lines().any(|line| line == "release-1.2.4"));
 }
+
+#[test]
+fn update_dry_run_does_not_write_files() {
+  let repo = init_repo();
+  let original = "[package]\nname=\"x\"\nversion=\"1.2.3\"\nrepository=\"https://github.com/octo/r\"\n";
+  seed_single_file_repo(&repo, "Cargo.toml", original);
+
+  fs::write(repo.path().join("src.rs"), "x").expect("write");
+  commit_with_date(repo.path(), "fix: patch", "2026-02-22T00:00:00Z");
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd.current_dir(repo.path()).args(["update", "--dry-run"]);
+  cmd
+    .assert()
+    .success()
+    .stdout(predicate::str::contains("dry-run: would update Cargo.toml to 1.2.4"));
+
+  let cargo = fs::read_to_string(repo.path().join("Cargo.toml")).expect("read");
+  assert_eq!(cargo, original);
+}
+
+#[test]
+fn update_dry_run_propagates_to_changelog_and_logs_commit_and_tag() {
+  let repo = init_repo();
+  seed_single_file_repo(
+    &repo,
+    "Cargo.toml",
+    "[package]\nname=\"x\"\nversion=\"1.2.3\"\nrepository=\"https://github.com/octo/r\"\n",
+  );
+
+  fs::write(repo.path().join("src.rs"), "x").expect("write");
+  commit_with_date(repo.path(), "fix: patch", "2026-02-22T00:00:00Z");
+
+  let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("cambi"));
+  cmd
+    .current_dir(repo.path())
+    .args(["update", "--dry-run", "--changelog", "--commit", "--tag"]);
+  cmd.assert().success().stdout(
+    predicate::str::contains("/ 1.2.4")
+      .and(predicate::str::contains("dry-run: would update Cargo.toml to 1.2.4"))
+      .and(predicate::str::contains(
+        "dry-run: would commit Cargo.toml, CHANGELOG.md with message 'chore: Updated version.'",
+      ))
+      .and(predicate::str::contains("dry-run: would create tag v1.2.4")),
+  );
+
+  assert!(!repo.path().join("CHANGELOG.md").exists());
+  let tags = git(repo.path(), &["tag", "--list"]);
+  assert!(!tags.lines().any(|line| line == "v1.2.4"));
+}

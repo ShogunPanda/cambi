@@ -293,6 +293,13 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
 
     if changelog_args.dry_run {
       println!("{output}");
+      if changelog_args.commit {
+        let commit_message = changelog_args
+          .commit_message
+          .as_deref()
+          .unwrap_or("chore: Updated CHANGELOG.md.");
+        println!("dry-run: would commit CHANGELOG.md with message '{commit_message}'");
+      }
       return Ok(());
     }
 
@@ -352,6 +359,13 @@ pub fn execute_changelog_command(changelog_args: &ChangelogArgs, config: &Effect
 
   if changelog_args.dry_run {
     println!("{output}");
+    if changelog_args.commit {
+      let commit_message = changelog_args
+        .commit_message
+        .as_deref()
+        .unwrap_or("chore: Updated CHANGELOG.md.");
+      println!("dry-run: would commit CHANGELOG.md with message '{commit_message}'");
+    }
     return Ok(());
   }
 

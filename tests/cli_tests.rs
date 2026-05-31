@@ -30,11 +30,21 @@ fn release_conflicts_are_enforced() {
 
 #[test]
 fn changelog_conflicts_are_enforced() {
-  let parsed = Args::try_parse_from(["cambi", "changelog", "--commit", "--dry-run"]);
-  assert!(parsed.is_err());
-
   let parsed = Args::try_parse_from(["cambi", "changelog", "minor", "--rebuild"]);
   assert!(parsed.is_err());
+}
+
+#[test]
+fn changelog_dry_run_allows_commit_for_logging() {
+  let args = Args::parse_from(["cambi", "changelog", "--commit", "--dry-run"]);
+
+  match args.command {
+    Command::Changelog(changelog_args) => {
+      assert!(changelog_args.commit);
+      assert!(changelog_args.dry_run);
+    }
+    _ => panic!("expected changelog command"),
+  }
 }
 
 #[test]
@@ -168,7 +178,7 @@ fn update_tag_is_parsed_with_commit() {
 
 #[test]
 fn update_short_flags_are_parsed() {
-  let args = Args::parse_from(["cambi", "update", "major", "-l", "-o", "-m", "msg", "-t"]);
+  let args = Args::parse_from(["cambi", "update", "major", "-l", "-o", "-m", "msg", "-t", "-d"]);
 
   match args.command {
     Command::Update(update_args) => {
@@ -177,6 +187,7 @@ fn update_short_flags_are_parsed() {
       assert_eq!(update_args.commit_message.as_deref(), Some("msg"));
       assert!(update_args.changelog);
       assert!(update_args.tag);
+      assert!(update_args.dry_run);
     }
     _ => panic!("expected update command"),
   }

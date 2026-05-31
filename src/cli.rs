@@ -41,6 +41,10 @@ pub struct UpdateArgs {
   /// Create a tag for the new version (requires --commit).
   #[arg(long, short = 't', requires = "commit")]
   pub tag: bool,
+
+  /// Preview changes without writing files.
+  #[arg(long, short = 'd')]
+  pub dry_run: bool,
 }
 
 #[derive(clap::Args, Debug, Default)]
@@ -55,7 +59,7 @@ pub struct ChangelogArgs {
   pub rebuild: bool,
 
   /// Auto-commit if CHANGELOG.md is the only changed file.
-  #[arg(long, short = 'o', conflicts_with = "dry_run")]
+  #[arg(long, short = 'o')]
   pub commit: bool,
 
   /// Custom commit message (requires --commit).
@@ -63,7 +67,7 @@ pub struct ChangelogArgs {
   pub commit_message: Option<String>,
 
   /// Preview changes without writing files.
-  #[arg(long, short = 'd', conflicts_with = "commit")]
+  #[arg(long, short = 'd')]
   pub dry_run: bool,
 }
 

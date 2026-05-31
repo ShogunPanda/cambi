@@ -120,6 +120,25 @@ pub fn update_cargo_toml_version(path: &Path, target: &UpdateTarget) -> Result<S
   Ok(next_string)
 }
 
+fn read_cargo_toml_target_version(path: &Path, target: &UpdateTarget) -> Result<String> {
+  let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
+  let doc = content
+    .parse::<toml_edit::DocumentMut>()
+    .context(format!("Invalid TOML in {}", path.display()))?;
+
+  let package = doc
+    .get("package")
+    .and_then(toml_edit::Item::as_table_like)
+    .ok_or(anyhow!("No [package] section found in {}", path.display()))?;
+
+  let current = package
+    .get("version")
+    .and_then(toml_edit::Item::as_str)
+    .ok_or(anyhow!("No package version found in {}", path.display()))?;
+
+  Ok(resolve_target_version(normalize_semver(current)?, target).to_string())
+}
+
 pub fn update_package_json_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let mut json: serde_json::Value =
@@ -145,6 +164,19 @@ pub fn update_package_json_version(path: &Path, target: &UpdateTarget) -> Result
   .context(format!("Cannot write {}", path.display()))?;
 
   Ok(next.to_string())
+}
+
+fn read_package_json_target_version(path: &Path, target: &UpdateTarget) -> Result<String> {
+  let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
+  let json: serde_json::Value =
+    serde_json::from_str(&content).context(format!("Invalid JSON in {}", path.display()))?;
+
+  let current = json
+    .get("version")
+    .and_then(|value| value.as_str())
+    .ok_or(anyhow!("No 'version' field found in {}", path.display()))?;
+
+  Ok(resolve_target_version(normalize_semver(current)?, target).to_string())
 }
 
 pub fn update_pyproject_toml_version(path: &Path, target: &UpdateTarget) -> Result<String> {
@@ -176,6 +208,31 @@ pub fn update_pyproject_toml_version(path: &Path, target: &UpdateTarget) -> Resu
     fs::write(path, doc.to_string()).context(format!("Cannot write {}", path.display()))?;
 
     return Ok(next_string);
+  }
+
+  Err(anyhow!(
+    "No supported version field found in {} (expected [project].version or [tool.poetry].version)",
+    path.display()
+  ))
+}
+
+fn read_pyproject_toml_target_version(path: &Path, target: &UpdateTarget) -> Result<String> {
+  let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
+  let doc = content
+    .parse::<toml_edit::DocumentMut>()
+    .context(format!("Invalid TOML in {}", path.display()))?;
+
+  if let Some(project_table) = doc.get("project").and_then(toml_edit::Item::as_table_like)
+    && let Some(version) = project_table.get("version").and_then(toml_edit::Item::as_str)
+  {
+    return Ok(resolve_target_version(normalize_semver(version)?, target).to_string());
+  }
+
+  if let Some(tool_table) = doc.get("tool").and_then(toml_edit::Item::as_table_like)
+    && let Some(poetry_table) = tool_table.get("poetry").and_then(toml_edit::Item::as_table_like)
+    && let Some(version) = poetry_table.get("version").and_then(toml_edit::Item::as_str)
+  {
+    return Ok(resolve_target_version(normalize_semver(version)?, target).to_string());
   }
 
   Err(anyhow!(
@@ -231,6 +288,24 @@ pub fn update_gemspec_version(path: &Path, target: &UpdateTarget) -> Result<Stri
   Ok(updated)
 }
 
+fn read_gemspec_target_version(path: &Path, target: &UpdateTarget) -> Result<String> {
+  let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
+  let re = Regex::new(r#"^\s*spec\.version\s*=\s*["'](?P<version>[^"']+)["']\s*$"#)
+    .expect("gemspec version regex must compile");
+
+  for line in content.lines() {
+    if let Some(captures) = re.captures(line) {
+      let current = captures
+        .name("version")
+        .map(|m| m.as_str())
+        .ok_or(anyhow!("Cannot parse spec.version in {}", path.display()))?;
+      return Ok(resolve_target_version(normalize_semver(current)?, target).to_string());
+    }
+  }
+
+  Err(anyhow!("No spec.version assignment found in {}", path.display()))
+}
+
 pub fn update_plain_version_file(path: &Path, target: &UpdateTarget, tag_pattern: &str) -> Result<String> {
   let current = if path.exists() {
     normalize_semver(&fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?)?
@@ -242,6 +317,16 @@ pub fn update_plain_version_file(path: &Path, target: &UpdateTarget, tag_pattern
   fs::write(path, format!("{}\n", next)).context(format!("Cannot write {}", path.display()))?;
 
   Ok(next.to_string())
+}
+
+fn read_plain_version_file_target_version(path: &Path, target: &UpdateTarget, tag_pattern: &str) -> Result<String> {
+  let current = if path.exists() {
+    normalize_semver(&fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?)?
+  } else {
+    latest_tag_version(tag_pattern)?
+  };
+
+  Ok(resolve_target_version(current, target).to_string())
 }
 
 pub fn update_mix_exs_version(path: &Path, target: &UpdateTarget) -> Result<String> {
@@ -278,6 +363,24 @@ pub fn update_mix_exs_version(path: &Path, target: &UpdateTarget) -> Result<Stri
   Ok(updated)
 }
 
+fn read_mix_exs_target_version(path: &Path, target: &UpdateTarget) -> Result<String> {
+  let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
+  let version_line =
+    Regex::new(r#"^\s*version:\s*["'](?P<version>[^"']+)["'],?\s*$"#).expect("mix.exs version regex must compile");
+
+  for line in content.lines() {
+    if let Some(captures) = version_line.captures(line) {
+      let current = captures
+        .name("version")
+        .map(|m| m.as_str())
+        .ok_or(anyhow!("Cannot parse version in {}", path.display()))?;
+      return Ok(resolve_target_version(normalize_semver(current)?, target).to_string());
+    }
+  }
+
+  Err(anyhow!("No version: field found in {}", path.display()))
+}
+
 pub fn update_pubspec_yaml_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let mut parsed: serde_yaml::Value =
@@ -306,6 +409,23 @@ pub fn update_pubspec_yaml_version(path: &Path, target: &UpdateTarget) -> Result
   .context(format!("Cannot write {}", path.display()))?;
 
   Ok(next.to_string())
+}
+
+fn read_pubspec_yaml_target_version(path: &Path, target: &UpdateTarget) -> Result<String> {
+  let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
+  let parsed: serde_yaml::Value =
+    serde_yaml::from_str(&content).context(format!("Invalid YAML in {}", path.display()))?;
+
+  let current = parsed
+    .get("version")
+    .and_then(serde_yaml::Value::as_str)
+    .ok_or(anyhow!("No 'version' field found in {}", path.display()))?;
+
+  if !parsed.is_mapping() {
+    return Err(anyhow!("{} must contain a top-level mapping", path.display()));
+  }
+
+  Ok(resolve_target_version(normalize_semver(current)?, target).to_string())
 }
 
 pub fn update_package_swift_version(path: &Path, target: &UpdateTarget) -> Result<String> {
@@ -349,6 +469,29 @@ pub fn update_package_swift_version(path: &Path, target: &UpdateTarget) -> Resul
   fs::write(path, format!("{}\n", lines.join("\n"))).context(format!("Cannot write {}", path.display()))?;
 
   Ok(updated)
+}
+
+fn read_package_swift_target_version(path: &Path, target: &UpdateTarget) -> Result<String> {
+  let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
+  let variable_line = Regex::new(r#"^\s*(?:let|var)\s+version\s*=\s*["'](?P<version>[^"']+)["']\s*$"#)
+    .expect("Package.swift variable regex must compile");
+  let argument_line = Regex::new(r#"^\s*version\s*:\s*["'](?P<version>[^"']+)["'],?\s*$"#)
+    .expect("Package.swift argument regex must compile");
+
+  for line in content.lines() {
+    if let Some(captures) = variable_line.captures(line).or_else(|| argument_line.captures(line)) {
+      let current = captures
+        .name("version")
+        .map(|m| m.as_str())
+        .ok_or(anyhow!("Cannot parse version in {}", path.display()))?;
+      return Ok(resolve_target_version(normalize_semver(current)?, target).to_string());
+    }
+  }
+
+  Err(anyhow!(
+    "No supported version assignment found in {} (expected let/var version = \"x.y.z\" or version: \"x.y.z\")",
+    path.display()
+  ))
 }
 
 fn commit_updated_paths(paths: &[PathBuf], commit_message: &str) -> Result<()> {
@@ -429,7 +572,7 @@ fn commit_updated_paths(paths: &[PathBuf], commit_message: &str) -> Result<()> {
   Ok(())
 }
 
-fn tag_current_commit(version: &str, tag_pattern: &str) -> Result<()> {
+fn tag_name_for_version(version: &str, tag_pattern: &str) -> Result<String> {
   let regex = Regex::new(tag_pattern).context(format!("Invalid tag regex pattern: {tag_pattern}"))?;
 
   let mut generated = Vec::new();
@@ -462,23 +605,28 @@ fn tag_current_commit(version: &str, tag_pattern: &str) -> Result<()> {
   generated.push(format!("v{version}"));
   generated.push(version.to_string());
 
-  let tag_name = generated
+  generated
     .iter()
     .find(|candidate| regex.is_match(candidate))
+    .cloned()
     .ok_or_else(|| {
       anyhow!(
         "Cannot derive tag from pattern '{}' for version {}",
         tag_pattern,
         version
       )
-    })?;
+    })
+}
+
+fn tag_current_commit(version: &str, tag_pattern: &str) -> Result<()> {
+  let tag_name = tag_name_for_version(version, tag_pattern)?;
 
   let repo = Repository::discover(".").context("Failed to discover git repository")?;
   let head = repo.head().context("Cannot resolve HEAD")?;
   let target = head.peel_to_commit().context("Cannot resolve HEAD commit")?;
 
   repo
-    .tag_lightweight(tag_name, target.as_object(), false)
+    .tag_lightweight(&tag_name, target.as_object(), false)
     .context(format!("Cannot create git tag '{}'", tag_name))?;
 
   Ok(())
@@ -553,6 +701,78 @@ fn apply_update_target(target: &UpdateTarget, config: &EffectiveConfig) -> Resul
   ))
 }
 
+fn read_update_target(target: &UpdateTarget, config: &EffectiveConfig) -> Result<(String, PathBuf)> {
+  let cargo_toml = Path::new("Cargo.toml");
+  if cargo_toml.exists() {
+    return Ok((
+      read_cargo_toml_target_version(cargo_toml, target)?,
+      cargo_toml.to_path_buf(),
+    ));
+  }
+
+  let package_json = Path::new("package.json");
+  if package_json.exists() {
+    return Ok((
+      read_package_json_target_version(package_json, target)?,
+      package_json.to_path_buf(),
+    ));
+  }
+
+  let pyproject_toml = Path::new("pyproject.toml");
+  if pyproject_toml.exists() {
+    return Ok((
+      read_pyproject_toml_target_version(pyproject_toml, target)?,
+      pyproject_toml.to_path_buf(),
+    ));
+  }
+
+  if let Ok(gemspec_path) = find_gemspec_path() {
+    return Ok((read_gemspec_target_version(&gemspec_path, target)?, gemspec_path));
+  }
+
+  let mix_exs = Path::new("mix.exs");
+  if mix_exs.exists() {
+    return Ok((read_mix_exs_target_version(mix_exs, target)?, mix_exs.to_path_buf()));
+  }
+
+  let pubspec_yaml = Path::new("pubspec.yaml");
+  if pubspec_yaml.exists() {
+    return Ok((
+      read_pubspec_yaml_target_version(pubspec_yaml, target)?,
+      pubspec_yaml.to_path_buf(),
+    ));
+  }
+
+  let package_swift = Path::new("Package.swift");
+  if package_swift.exists() {
+    return Ok((
+      read_package_swift_target_version(package_swift, target)?,
+      package_swift.to_path_buf(),
+    ));
+  }
+
+  let version_lower = Path::new("version");
+  if version_lower.exists() {
+    return Ok((
+      read_plain_version_file_target_version(version_lower, target, &config.tag_pattern)?,
+      version_lower.to_path_buf(),
+    ));
+  }
+
+  let version_upper = Path::new("VERSION");
+  if version_upper.exists() {
+    return Ok((
+      read_plain_version_file_target_version(version_upper, target, &config.tag_pattern)?,
+      version_upper.to_path_buf(),
+    ));
+  }
+
+  Err(anyhow!(
+    "No supported package file found (Cargo.toml, package.json, pyproject.toml, *.gemspec, mix.exs, pubspec.yaml, \
+     Package.swift, or version/VERSION)"
+  ))
+}
+
 pub fn execute_version(version_args: &VersionArgs, config: &EffectiveConfig) -> Result<()> {
   let current = if let Some(from_tag) = version_args.from_tag.as_deref() {
     normalize_semver(from_tag)?
@@ -574,24 +794,55 @@ pub fn execute_semver(semver_args: &SemverArgs, config: &EffectiveConfig) -> Res
 pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Result<()> {
   let detected_bump = detect_bump(update_args.from_tag.as_deref(), config)?;
   let target = parse_update_target(update_args.target.as_deref(), detected_bump)?;
+  let (target_version, target_path) = read_update_target(&target, config)?;
 
   if update_args.changelog {
-    let changelog_target = update_args
-      .target
-      .clone()
-      .unwrap_or_else(|| detected_bump.as_str().to_string());
     let changelog_args = ChangelogArgs {
-      target: Some(changelog_target),
+      target: Some(target_version.clone()),
       rebuild: false,
       commit: false,
       commit_message: None,
-      dry_run: false,
+      dry_run: update_args.dry_run,
     };
 
     execute_changelog_command(&changelog_args, config)?;
   }
 
-  let (updated, updated_path) = apply_update_target(&target, config)?;
+  let (updated, updated_path) = if update_args.dry_run {
+    (target_version, target_path)
+  } else {
+    apply_update_target(&target, config)?
+  };
+
+  if update_args.dry_run {
+    println!("dry-run: would update {} to {}", updated_path.display(), updated);
+
+    if update_args.commit {
+      let commit_message = update_args
+        .commit_message
+        .as_deref()
+        .unwrap_or("chore: Updated version.");
+      let mut updated_paths = vec![updated_path.display().to_string()];
+
+      if update_args.changelog {
+        updated_paths.push("CHANGELOG.md".to_string());
+      }
+
+      println!(
+        "dry-run: would commit {} with message '{}'",
+        updated_paths.join(", "),
+        commit_message
+      );
+
+      if update_args.tag {
+        let tag_name = tag_name_for_version(&updated, &config.tag_pattern)?;
+        println!("dry-run: would create tag {tag_name}");
+      }
+    }
+
+    println!("Updated version to {}.", updated);
+    return Ok(());
+  }
 
   if update_args.commit {
     let commit_message = update_args
