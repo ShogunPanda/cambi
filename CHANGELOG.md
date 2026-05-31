@@ -1,3 +1,8 @@
+### 2026-05-31 / 0.5.0
+
+- feat: Added show option to the update command.
+- feat: Support dry-run across all commands.
+
 ### 2026-05-23 / 0.4.0
 
 - feat: Added changelog switch to the update command.
