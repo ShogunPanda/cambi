@@ -498,6 +498,9 @@ fn commit_updated_paths(paths: &[PathBuf], commit_message: &str) -> Result<()> {
   let repo = Repository::discover(".").context("Failed to discover git repository")?;
 
   let workdir = repo.workdir().ok_or(anyhow!("Repository has no working directory"))?;
+
+  // git2 stages paths relative to the worktree, while callers may pass absolute
+  // paths from discovery helpers.
   let paths_to_stage = paths
     .iter()
     .map(|path| {
@@ -518,6 +521,8 @@ fn commit_updated_paths(paths: &[PathBuf], commit_message: &str) -> Result<()> {
   options.include_untracked(false).recurse_untracked_dirs(false);
   let statuses = repo.statuses(Some(&mut options)).context("Failed to read git status")?;
 
+  // Preserve the existing auto-commit behavior: include all tracked dirty files,
+  // not only the version files explicitly touched by this command.
   for entry in statuses.iter() {
     let Some(path) = entry.path() else {
       continue;
@@ -582,6 +587,8 @@ fn tag_name_for_version(version: &str, tag_pattern: &str) -> Result<String> {
   let semver_pattern = r"\d+\.\d+\.\d+";
 
   if let Some((raw_prefix, raw_suffix)) = raw_pattern.split_once(semver_pattern) {
+    // Derive the tag shape from simple semver regexes, then fall back to common
+    // v-prefixed and plain versions below.
     let unescape = |raw: &str| {
       let mut out = String::new();
       let mut chars = raw.chars();
@@ -810,6 +817,8 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
       dry_run: update_args.dry_run,
     };
 
+    // CHANGELOG.md is generated before the version file is written so its
+    // section can target the same computed version in dry-run and real modes.
     execute_changelog_command(&changelog_args, config)?;
   }
 

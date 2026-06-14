@@ -1,5 +1,5 @@
 combine_control_expr   = false
-fn_single_line         = true
+fn_single_line         = false
 force_multiline_blocks = true
 format_strings         = true
 group_imports          = "StdExternalCrate"

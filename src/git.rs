@@ -26,6 +26,9 @@ pub fn read_tags(tag_pattern: &str) -> Result<Vec<GitTag>> {
     .filter(|name| tag_regex.is_match(name))
     .filter_map(|name| {
       let object = repo.revparse_single(&format!("refs/tags/{name}")).ok()?;
+
+      // Tags can point directly to commits or to tag objects; normalize both to
+      // the commit so callers can sort and diff them consistently.
       let commit = if object.kind() == Some(ObjectType::Commit) {
         object.into_commit().ok()?
       } else {

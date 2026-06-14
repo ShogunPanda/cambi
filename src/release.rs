@@ -85,11 +85,17 @@ fn detect_owner_repo_from_files() -> Option<(String, String)> {
   None
 }
 
-pub fn normalize_release_version(version: &str) -> String { version.trim_start_matches('v').to_string() }
+pub fn normalize_release_version(version: &str) -> String {
+  version.trim_start_matches('v').to_string()
+}
 
-pub fn release_tag(tag: &str) -> String { format!("v{}", normalize_release_version(tag)) }
+pub fn release_tag(tag: &str) -> String {
+  format!("v{}", normalize_release_version(tag))
+}
 
-pub fn release_title(tag: &str) -> String { normalize_release_version(tag) }
+pub fn release_title(tag: &str) -> String {
+  normalize_release_version(tag)
+}
 
 pub fn render_release_body(commits: &[String]) -> String {
   if commits.is_empty() {
@@ -189,7 +195,9 @@ fn github_api_base() -> String {
   std::env::var("CAMBI_GITHUB_API_BASE").unwrap_or_else(|_| "https://api.github.com".to_string())
 }
 
-fn github_client() -> ureq::Agent { ureq::AgentBuilder::new().build() }
+fn github_client() -> ureq::Agent {
+  ureq::AgentBuilder::new().build()
+}
 
 fn list_releases(owner: &str, repo: &str, token: &str) -> Result<Vec<ExistingRelease>> {
   let url = format!("{}/repos/{owner}/{repo}/releases?per_page=100", github_api_base());
@@ -294,6 +302,8 @@ fn resolve_target_candidates(args: &ReleaseArgs, config: &EffectiveConfig) -> Re
   if let Some(target) = args.target.as_deref() {
     let normalized_target = target.to_ascii_lowercase();
 
+    // Bump targets reuse the latest tag notes but publish them under the bumped
+    // version; exact targets intentionally create an empty release body.
     if matches!(normalized_target.as_str(), "major" | "minor" | "patch" | "path") {
       let tags = read_required_tags(&config.tag_pattern)?;
       let filter = CommitFilter::new(&config.ignore_patterns)?;
