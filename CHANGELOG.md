@@ -1,3 +1,7 @@
+### 2026-10-09 / 0.6.0
+
+- feat: Added commit command.
+
 ### 2026-05-31 / 0.5.1
 
 - fix: Fixed version on publishing.
