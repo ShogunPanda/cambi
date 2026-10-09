@@ -52,6 +52,21 @@ pub struct UpdateArgs {
 }
 
 #[derive(clap::Args, Debug, Default)]
+pub struct CommitArgs {
+  /// Custom commit message.
+  #[arg(long, short = 'm', value_name = "MESSAGE")]
+  pub commit_message: Option<String>,
+
+  /// Create a tag for the version already written in the project file.
+  #[arg(long, short = 't')]
+  pub tag: bool,
+
+  /// Preview commit and tag actions without writing files.
+  #[arg(long, short = 'd')]
+  pub dry_run: bool,
+}
+
+#[derive(clap::Args, Debug, Default)]
 pub struct ChangelogArgs {
   /// Optional explicit changelog target (major|minor|patch or a semver like
   /// 1.2.3 / v1.2.3).
@@ -130,6 +145,8 @@ pub enum Command {
   /// Update project version files based on detected or explicit target.
   #[command(alias = "u")]
   Update(UpdateArgs),
+  /// Commit tracked changes and existing release files without updating them.
+  Commit(CommitArgs),
   /// Update CHANGELOG.md with the next release section.
   #[command(alias = "c")]
   Changelog(ChangelogArgs),
@@ -144,6 +161,7 @@ impl Command {
       Self::Version(_) => "version",
       Self::Semver(_) => "semver",
       Self::Update(_) => "update",
+      Self::Commit(_) => "commit",
       Self::Changelog(_) => "changelog",
       Self::Release(_) => "release",
     }

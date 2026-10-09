@@ -6,7 +6,7 @@ use cambi::{
   cli::{Args, Command},
   config::{ConfigOverrides, EffectiveConfig, load_file},
   release::execute_release_command,
-  version::{execute_semver, execute_update, execute_version},
+  version::{execute_commit, execute_semver, execute_update, execute_version},
 };
 use clap::Parser;
 
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
         verbose: Some(args.verbose),
       }
     }
-    Command::Version(_) | Command::Semver(_) | Command::Update(_) | Command::Changelog(_) => {
+    Command::Version(_) | Command::Semver(_) | Command::Update(_) | Command::Commit(_) | Command::Changelog(_) => {
       ConfigOverrides {
         tag_pattern: args.tag_pattern.clone(),
         verbose: Some(args.verbose),
@@ -57,6 +57,7 @@ fn main() -> Result<()> {
     Command::Version(version_args) => execute_version(version_args, &config)?,
     Command::Semver(semver_args) => execute_semver(semver_args, &config)?,
     Command::Update(update_args) => execute_update(update_args, &config)?,
+    Command::Commit(commit_args) => execute_commit(commit_args, &config)?,
     Command::Changelog(changelog_args) => execute_changelog_command(changelog_args, &config)?,
     Command::Release(release_args) => execute_release_command(release_args, &config)?,
   }

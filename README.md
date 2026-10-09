@@ -67,6 +67,7 @@ Global options:
 - `version` (`v`): print the current version
 - `semver` (`s`): compute semantic version information
 - `update` (`u`): update project version files from detected or explicit target
+- `commit`: commit tracked changes and existing release files without another version bump
 - `changelog` (`c`): update `CHANGELOG.md` with the next release section
 - `release` (`r`): publish releases on GitHub from git history derived by tags
 
@@ -128,7 +129,7 @@ Options:
 
 - `-f, --from-tag <FROM_TAG>`: override start tag instead of auto-detecting latest version tag
 - `-l, --changelog`: update `CHANGELOG.md` before updating the version file
-- `-o, --commit`: commit updated version file
+- `-o, --commit`: commit all tracked changes and updated release files
 - `-m, --commit-message <MESSAGE>`: custom commit message (requires `--commit`)
 - `-t, --tag`: create a git tag for the updated version (requires `--commit`)
 - `-d, --dry-run`: preview changes without writing files
@@ -148,6 +149,35 @@ Supported update targets (first match wins):
 - `pubspec.yaml`
 - `Package.swift`
 - `version` / `VERSION`
+
+#### `commit`
+
+Commit changes after a separate version update, allowing scripts to run before committing:
+
+```sh
+cambi update -l
+./update-generated-files
+cambi commit -t
+```
+
+The command reads the version already written in the project file, using the same supported files and priority as
+`update`. It does not bump the version or regenerate the changelog. Like `update --commit`, it stages all tracked
+changes (including deletions), preserves already staged additions, and includes the version file and an existing
+`CHANGELOG.md` even if they are new files. Other untracked files are not automatically added.
+
+The default commit message is `chore: Updated version.`. With `--tag`, the tag points to the new commit and uses the
+existing project version and configured tag pattern. No context is saved between commands: repeat any explicit
+`--config` or `--tag-pattern` options when needed.
+
+Options:
+
+- `-m, --commit-message <MESSAGE>`: custom commit message
+- `-t, --tag`: create a git tag for the existing project version
+- `-d, --dry-run`: preview commit and tag actions without writing files
+- `-c, --config <CONFIG>`
+- `-p, --tag-pattern <TAG_PATTERN>`
+- `-v, --verbose`
+- `-h, --help`
 
 #### `changelog` (`c`)
 

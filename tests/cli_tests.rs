@@ -12,6 +12,9 @@ fn command_name_is_reported() {
   let args = Args::parse_from(["cambi", "update"]);
   assert_eq!(args.command.name(), "update");
 
+  let args = Args::parse_from(["cambi", "commit"]);
+  assert_eq!(args.command.name(), "commit");
+
   let args = Args::parse_from(["cambi", "changelog"]);
   assert_eq!(args.command.name(), "changelog");
 
@@ -26,6 +29,44 @@ fn release_conflicts_are_enforced() {
 
   let parsed = Args::try_parse_from(["cambi", "release", "1.2.3", "--rebuild"]);
   assert!(parsed.is_err());
+}
+
+#[test]
+fn commit_defaults_are_parsed() {
+  let args = Args::parse_from(["cambi", "commit"]);
+  match args.command {
+    Command::Commit(commit_args) => {
+      assert_eq!(commit_args.commit_message, None);
+      assert!(!commit_args.tag);
+      assert!(!commit_args.dry_run);
+    }
+    _ => panic!("expected commit command"),
+  }
+}
+
+#[test]
+fn commit_options_are_parsed() {
+  for flags in [
+    ["-m", "custom message", "-t", "-d"],
+    ["--commit-message", "custom message", "--tag", "--dry-run"],
+  ] {
+    let args = Args::parse_from(["cambi", "commit"].into_iter().chain(flags));
+    match args.command {
+      Command::Commit(commit_args) => {
+        assert_eq!(commit_args.commit_message.as_deref(), Some("custom message"));
+        assert!(commit_args.tag);
+        assert!(commit_args.dry_run);
+      }
+      _ => panic!("expected commit command"),
+    }
+  }
+}
+
+#[test]
+fn commit_rejects_update_options() {
+  for flag in ["minor", "--changelog", "--commit", "--from-tag", "--show"] {
+    assert!(Args::try_parse_from(["cambi", "commit", flag]).is_err());
+  }
 }
 
 #[test]
