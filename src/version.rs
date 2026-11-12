@@ -1,6 +1,7 @@
 use std::{
   fs,
   path::{Path, PathBuf},
+  process::Command,
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -95,46 +96,89 @@ fn detect_bump(from_tag: Option<&str>, config: &EffectiveConfig) -> Result<BumpL
   Ok(bump)
 }
 
+fn cargo_version_item<'a>(doc: &'a mut toml_edit::DocumentMut, path: &Path) -> Result<&'a mut toml_edit::Item> {
+  let package = doc.get("package").and_then(toml_edit::Item::as_table_like);
+  let inherited = package
+    .and_then(|package| package.get("version"))
+    .and_then(|version| version.get("workspace"))
+    .and_then(toml_edit::Item::as_bool)
+    == Some(true);
+
+  // An explicit package version takes precedence over workspace defaults.
+  if package.is_some() && !inherited {
+    return doc["package"]
+      .get_mut("version")
+      .filter(|version| version.as_str().is_some())
+      .ok_or_else(|| anyhow!("No package version found in {}", path.display()));
+  }
+
+  doc
+    .get_mut("workspace")
+    .and_then(|workspace| workspace.get_mut("package"))
+    .and_then(|package| package.get_mut("version"))
+    .filter(|version| version.as_str().is_some())
+    .ok_or_else(|| {
+      anyhow!(
+        "No [package] section found or no workspace package version found in {}",
+        path.display()
+      )
+    })
+}
+
 pub fn update_cargo_toml_version(path: &Path, target: &UpdateTarget) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
   let mut doc = content
     .parse::<toml_edit::DocumentMut>()
     .context(format!("Invalid TOML in {}", path.display()))?;
 
-  let package = doc
-    .get("package")
-    .and_then(toml_edit::Item::as_table_like)
-    .ok_or(anyhow!("No [package] section found in {}", path.display()))?;
-
-  let current = package
-    .get("version")
-    .and_then(toml_edit::Item::as_str)
-    .ok_or(anyhow!("No package version found in {}", path.display()))?;
+  let version = cargo_version_item(&mut doc, path)?;
+  let current = version.as_str().expect("validated Cargo version");
 
   let next = resolve_target_version(normalize_semver(current)?, target);
   let next_string = next.to_string();
-  doc["package"]["version"] = toml_edit::value(next_string.clone());
+  let mut next_value = toml_edit::Value::from(next_string.clone());
+  *next_value.decor_mut() = version.as_value().expect("validated Cargo version").decor().clone();
+  *version = toml_edit::Item::Value(next_value);
 
   fs::write(path, doc.to_string()).context(format!("Cannot write {}", path.display()))?;
+
+  // Let Cargo update workspace packages and lockfile references without upgrading
+  // dependencies.
+  if path.with_file_name("Cargo.lock").exists() {
+    let result = (|| -> Result<()> {
+      let output = Command::new("cargo")
+        .args(["update", "--workspace", "--offline", "--manifest-path"])
+        .arg(path)
+        .output()
+        .context("Cannot run Cargo to update Cargo.lock")?;
+
+      if !output.status.success() {
+        return Err(anyhow!(
+          "Cannot update Cargo.lock: {}",
+          String::from_utf8_lossy(&output.stderr)
+        ));
+      }
+
+      Ok(())
+    })();
+
+    if let Err(error) = result {
+      fs::write(path, content).context(format!("Cannot restore {}", path.display()))?;
+      return Err(error);
+    }
+  }
 
   Ok(next_string)
 }
 
 fn read_cargo_toml_version(path: &Path) -> Result<String> {
   let content = fs::read_to_string(path).context(format!("Cannot read {}", path.display()))?;
-  let doc = content
+  let mut doc = content
     .parse::<toml_edit::DocumentMut>()
     .context(format!("Invalid TOML in {}", path.display()))?;
 
-  let package = doc
-    .get("package")
-    .and_then(toml_edit::Item::as_table_like)
-    .ok_or(anyhow!("No [package] section found in {}", path.display()))?;
-
-  let current = package
-    .get("version")
-    .and_then(toml_edit::Item::as_str)
-    .ok_or(anyhow!("No package version found in {}", path.display()))?;
+  let version = cargo_version_item(&mut doc, path)?;
+  let current = version.as_str().expect("validated Cargo version");
 
   Ok(normalize_semver(current)?.to_string())
 }
@@ -803,6 +847,10 @@ pub fn execute_commit(commit_args: &CommitArgs, config: &EffectiveConfig) -> Res
     .unwrap_or("chore: Updated version.");
   let mut paths = vec![version_path];
 
+  if paths[0] == Path::new("Cargo.toml") && Path::new("Cargo.lock").exists() {
+    paths.push(PathBuf::from("Cargo.lock"));
+  }
+
   // A separate update may have created an untracked changelog. Include it just
   // as update --changelog --commit would, without regenerating its contents.
   if Path::new("CHANGELOG.md").exists() {
@@ -867,6 +915,10 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
         .unwrap_or("chore: Updated version.");
       let mut updated_paths = vec![updated_path.display().to_string()];
 
+      if updated_path == Path::new("Cargo.toml") && Path::new("Cargo.lock").exists() {
+        updated_paths.push("Cargo.lock".to_string());
+      }
+
       if update_args.changelog {
         updated_paths.push("CHANGELOG.md".to_string());
       }
@@ -893,6 +945,10 @@ pub fn execute_update(update_args: &UpdateArgs, config: &EffectiveConfig) -> Res
       .as_deref()
       .unwrap_or("chore: Updated version.");
     let mut updated_paths = vec![updated_path];
+
+    if updated_paths[0] == Path::new("Cargo.toml") && Path::new("Cargo.lock").exists() {
+      updated_paths.push(PathBuf::from("Cargo.lock"));
+    }
 
     if update_args.changelog {
       updated_paths.push(PathBuf::from("CHANGELOG.md"));

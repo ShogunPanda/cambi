@@ -150,6 +150,11 @@ Supported update targets (first match wins):
 - `Package.swift`
 - `version` / `VERSION`
 
+Cargo projects can use `package.version` or inherit `workspace.package.version`, including virtual workspaces.
+An explicit `package.version` takes precedence. When `Cargo.lock` exists, Cargo synchronizes workspace package
+versions offline without upgrading dependencies, before any commit or tag. Cargo must be available on `PATH`.
+Dry runs and `--show` do not modify the manifest or lockfile.
+
 #### `commit`
 
 Commit changes after a separate version update, allowing scripts to run before committing:
