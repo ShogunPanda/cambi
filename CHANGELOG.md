@@ -1,3 +1,7 @@
+### 2026-11-12 / 0.7.0
+
+- feat: Added support for Cargo workspaces.
+
 ### 2026-10-09 / 0.6.0
 
 - feat: Added commit command.
